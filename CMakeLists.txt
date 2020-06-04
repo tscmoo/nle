@@ -7,7 +7,7 @@ file(GLOB NETHACK_SRC
   "src/*.c"
   "sys/share/posixregex.c"
   "sys/share/ioctl.c"
-  "sys/unix/unixmain.c"
+  "sys/unix/rlmain.cc"
   "sys/unix/unixunix.c"
   "sys/share/unixtty.c"
   "sys/unix/unixres.c"
@@ -22,3 +22,8 @@ target_include_directories(nethack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include /u
 target_link_directories(nethack PUBLIC /usr/local/lib)
 target_link_libraries(nethack PUBLIC ncurses m zmq lua)
 target_link_libraries(nethack PRIVATE flatbuffers)
+
+add_executable(rlmain "sys/unix/rlmainmain.cc")
+set_target_properties(rlmain PROPERTIES CXX_STANDARD 11)
+
+target_link_libraries(rlmain PUBLIC nethack)
