@@ -268,6 +268,10 @@ E void FDECL(video_update_positionbar, (char *));
 #endif /*MSDOS*/
 #endif /*NO_TERMS*/
 
+#ifdef RL_GRAPHICS
+/* undef putchar, etc. */
+#endif /*RL_GRAPHICS*/
+
 #undef E
 
 #endif /* WINTTY_H */
