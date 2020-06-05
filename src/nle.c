@@ -208,13 +208,27 @@ size_t count;
     return read(nle.outpipe[0], buf, count);
 }
 
+int oldin;
+int oldout;
+
+int read_stop_pipe[2];
+
 void *
 read_thread(void *fdp)
 {
-    int fd = *(int *) fdp;
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(oldin, &rfds);
+    FD_SET(read_stop_pipe[0], &rfds);
+
     char i;
-    while ((read((int) fd, &i, 1)) > 0) {
+    while (select(read_stop_pipe[0] + 1, &rfds, NULL, NULL, NULL) != -1) {
+        if (FD_ISSET(read_stop_pipe[0], &rfds))
+            break;
+        read(oldin, &i, 1);
         write(nle.inpipe[1], &i, 1);
+
+        FD_SET(read_stop_pipe[0], &rfds);
     }
     return 0;
 }
@@ -231,11 +245,13 @@ nle_start()
 {
     init_nle_globals();
 
-    int oldin = dup(STDIN_FILENO);
-    int oldout = dup(STDOUT_FILENO);
+    oldin = dup(STDIN_FILENO);
+    oldout = dup(STDOUT_FILENO);
 
     dup2(nle.inpipe[0], STDIN_FILENO);
     dup2(nle.outpipe[1], STDOUT_FILENO);
+
+    pipe(read_stop_pipe);
 
     close(nle.inpipe[0]);
     close(nle.outpipe[1]);
@@ -263,14 +279,13 @@ nle_start()
 
     const char *message = "nle_start: Read loop finished\n\0";
     write(oldout, message, strlen(message));
-    fsync(oldout);
-
-    tcsetattr(oldin, TCSANOW, &old);
-    close(oldin);
 
     pthread_join(thread, NULL);
+
+    write(read_stop_pipe[1], buf, 1);
+
     pthread_join(input_thread, NULL);
-    write(oldout, "second thread joined", 20);
+    tcsetattr(oldin, TCSANOW, &old);
 }
 
 /* From unixtty.c */
