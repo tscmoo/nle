@@ -4176,7 +4176,7 @@ status_sanity_check(VOID_ARGS)
         "BL_TIME", "BL_HUNGER", "BL_HP", "BL_HPMAX",           /* 16.. 19 */
         "BL_LEVELDESC", "BL_EXP", "BL_CONDITION"              /* 20.. 22 */
     };
-   
+
     if (in_sanity_check)
         return;
     in_sanity_check = TRUE;

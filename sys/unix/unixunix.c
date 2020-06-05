@@ -97,7 +97,7 @@ getlock()
     register int i = 0, fd, c;
     const char *fq_lock;
 
-#ifdef TTY_GRAPHICS
+#ifdef NLE_UNDEFINED
     /* idea from rpick%ucqais@uccba.uc.edu
      * prevent automated rerolling of characters
      * test input (fd0) so that tee'ing output to get a screen dump still
@@ -164,26 +164,27 @@ getlock()
             goto gotlock;
         (void) close(fd);
 
-      {
-        const char destroy_old_game_prompt[] =
-    "There is already a game in progress under your name.  Destroy old game?";
+        {
+            const char destroy_old_game_prompt[] =
+                "There is already a game in progress under your name.  "
+                "Destroy old game?";
 
-        if (iflags.window_inited) {
-            /* this is a candidate for paranoid_confirmation */
-            c = yn(destroy_old_game_prompt);
-        } else {
-            (void) printf("\n%s [yn] ", destroy_old_game_prompt);
-            (void) fflush(stdout);
-            if ((c = getchar()) != EOF) {
-                int tmp;
-
-                (void) putchar(c);
+            if (iflags.window_inited) {
+                /* this is a candidate for paranoid_confirmation */
+                c = yn(destroy_old_game_prompt);
+            } else {
+                (void) printf("\n%s [yn] ", destroy_old_game_prompt);
                 (void) fflush(stdout);
-                while ((tmp = getchar()) != '\n' && tmp != EOF)
-                    ; /* eat rest of line and newline */
+                if ((c = getchar()) != EOF) {
+                    int tmp;
+
+                    (void) putchar(c);
+                    (void) fflush(stdout);
+                    while ((tmp = getchar()) != '\n' && tmp != EOF)
+                        ; /* eat rest of line and newline */
+                }
             }
         }
-      }
         if (c == 'y' || c == 'Y') {
             if (eraseoldlocks()) {
                 goto gotlock;

@@ -268,8 +268,17 @@ E void FDECL(video_update_positionbar, (char *));
 #endif /*MSDOS*/
 #endif /*NO_TERMS*/
 
-#ifdef RL_GRAPHICS
-/* undef putchar, etc. */
+#ifdef RL_GRAPHICSXXX
+#undef putchar
+#undef putc
+#undef puts
+//E int FDECL(nle_putchar, (int c));
+//E int FDECL(nle_puts, (const char *str));
+//E FILE* nle_stdout;
+//#undef stdout
+//#define stdout nle_stdout
+//#define putchar nle_putchar
+//#define puts nle_puts
 #endif /*RL_GRAPHICS*/
 
 #undef E

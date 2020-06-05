@@ -38,11 +38,7 @@ static void NDECL(dump_plines);
 #endif
 static void FDECL(dump_everything, (int, time_t));
 
-#if defined(__BEOS__) || defined(MICRO) || defined(OS2) || defined(WIN32)
 extern void FDECL(nethack_exit, (int));
-#else
-#define nethack_exit exit
-#endif
 
 #define done_stopprint g.program_state.stopprint
 
@@ -110,7 +106,7 @@ int sig_unused UNUSED;
 {
 #define SIG_MSG "\nSignal received.\n"
     int f2;
-    
+
     f2 = (int) write(2, SIG_MSG, sizeof SIG_MSG - 1);
     nhUse(f2);  /* what could we do if write to fd#2 (stderr) fails  */
     NH_abort(); /* ... and we're already in the process of quitting? */
