@@ -51,6 +51,10 @@ extern bool xwaitingforspace;
 
 extern unsigned long nle_seeds[];
 
+extern "C" {
+extern void nle_yield(boolean);
+}
+
 namespace nethack_rl
 {
 std::deque<std::string> win_proc_calls;
@@ -230,7 +234,7 @@ NetHackRL::~NetHackRL()
 
     zmq::message_t reply(builder.GetSize());
     memcpy(reply.data(), builder.GetBufferPointer(), builder.GetSize());
-    zmq_socket_.send(reply);
+    // zmq_socket_.send(reply);
 
     zmq_socket_.unbind(socket_address_);
 }
@@ -482,7 +486,9 @@ NetHackRL::getch_method()
     int action;
     zmq::message_t request;
 
-    zmq_socket_.send(observation_message());
+    // zmq_socket_.send(observation_message());
+    nle_yield(FALSE);
+
     return tty_nhgetch();
 }
 

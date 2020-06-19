@@ -14,13 +14,15 @@ file(GLOB NETHACK_SRC
   "win/rl/winrl.cc"
   )
 
+add_subdirectory(third_party/deboost.context)
+
 # libnethack library
 add_library(nethack SHARED ${NETHACK_SRC})
 set_target_properties(nethack PROPERTIES CXX_STANDARD 14)
 target_include_directories(nethack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include /usr/local/include)
 target_link_directories(nethack PUBLIC /usr/local/lib)
 target_link_libraries(nethack PUBLIC ncurses m zmq lua)
-target_link_libraries(nethack PRIVATE flatbuffers)
+target_link_libraries(nethack PRIVATE flatbuffers fcontext)
 
 add_executable(rlmain "sys/unix/rlmainmain.cc")
 set_target_properties(rlmain PROPERTIES CXX_STANDARD 11)

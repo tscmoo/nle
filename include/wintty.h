@@ -272,11 +272,13 @@ E void FDECL(video_update_positionbar, (char *));
 #undef putchar
 #undef putc
 #undef puts
-//E int FDECL(nle_putchar, (int c));
-//E int FDECL(nle_puts, (const char *str));
-//E FILE* nle_stdout;
+#undef fflush
+E int FDECL(nle_putchar, (int) );
+/*E int FDECL(nle_putc, (int) );*/
+E int FDECL(nle_puts, (const char *) );
+
+// E FILE* nle_stdout;
 //#undef stdout
-//#define stdout nle_stdout
 //#define putchar nle_putchar
 //#define puts nle_puts
 #endif /*RL_GRAPHICS*/

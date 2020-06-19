@@ -1,9 +1,9 @@
-// Should be called nle.c
-
 #include <pthread.h>
 #include <signal.h>
 #include <string.h>
 #include <termios.h>
+
+#include <fcontext/fcontext.h>
 
 #define NEED_VARARGS
 #include "hack.h"
@@ -12,25 +12,25 @@
 
 #include "nle.h"
 
-// We are fine with whatever.
+#define STACK_SIZE (1 << 15) // 32KiB
+
+/* We are fine with whatever. */
 boolean
 authorize_wizard_mode()
 {
     return TRUE;
 }
 
-boolean
-check_user_string(char *optstr)
+boolean check_user_string(optstr) char *optstr;
 {
     return TRUE;
 }
 
-void
-port_insert_pastebuf(char *buf)
+void port_insert_pastebuf(buf) char *buf;
 {
 }
 
-// Copied from unixmain.c.
+/* Copied from unixmain.c. */
 unsigned long
 sys_random_seed()
 {
@@ -63,9 +63,8 @@ sys_random_seed()
     return seed;
 }
 
-// Copied from unixmain.c.
-void
-sethanguphandler(void (*handler)(int))
+/* Copied from unixmain.c. */
+void sethanguphandler(handler) void FDECL((*handler), (int) );
 {
 #ifdef SA_RESTART
     /* don't want reads to restart.  If SA_RESTART is defined, we know
@@ -92,8 +91,6 @@ sethanguphandler(void (*handler)(int))
 
 struct nle_globals nle;
 
-FILE *nle_stdout;
-
 void
 init_nle_globals()
 {
@@ -101,24 +98,16 @@ init_nle_globals()
     pipe(nle.outpipe);
     nle.in = fdopen(nle.inpipe[0], "r");
     nle.out = fdopen(nle.inpipe[1], "w");
-
-    nle_stdout = nle.out;
 }
 
-int
-nle_putchar(int c)
-{
-    return putc(c, nle.out);
-}
+// Move to .h
+fcontext_t returncontext;
 
-int
-nle_puts(const char *str)
+void
+mainloop(fcontext_transfer_t ctx_t)
 {
-    return fputs(str, nle.out);
-}
+    returncontext = ctx_t.ctx;
 
-void *mainloop(unused) void *unused;
-{
     early_init();
 
     g.hname = "nethack";
@@ -198,7 +187,29 @@ void *mainloop(unused) void *unused;
     }
 
     moveloop(resuming);
+}
 
+int nle_putchar(c) int c;
+{
+    return putc(c, nle.out);
+}
+
+int nle_puts(str) const char *str;
+{
+    // careful with newlines here.
+    return fputs(str, nle.out);
+}
+
+/*
+int nle_putc(c) int c;
+{
+    return putc(c, nle.out);
+}
+*/
+
+/* win/tty only calls fflush(stdout), which we ignore. */
+int nle_fflush(stream) FILE *stream;
+{
     return 0;
 }
 
@@ -208,36 +219,18 @@ size_t count;
     return read(nle.outpipe[0], buf, count);
 }
 
-int oldin;
-int oldout;
-
-int read_stop_pipe[2];
-
-void *
-read_thread(void *fdp)
+void nle_yield(done) boolean done;
 {
-    fd_set rfds;
-    FD_ZERO(&rfds);
-    FD_SET(oldin, &rfds);
-    FD_SET(read_stop_pipe[0], &rfds);
+    fflush(stdout);
+    fcontext_transfer_t t = jump_fcontext(returncontext, (void *) done);
 
-    char i;
-    while (select(read_stop_pipe[0] + 1, &rfds, NULL, NULL, NULL) != -1) {
-        if (FD_ISSET(read_stop_pipe[0], &rfds))
-            break;
-        read(oldin, &i, 1);
-        write(nle.inpipe[1], &i, 1);
-
-        FD_SET(read_stop_pipe[0], &rfds);
-    }
-    return 0;
+    if (!done)
+        returncontext = t.ctx;
 }
 
-void
-nethack_exit(int status)
+void nethack_exit(status) int status;
 {
-    close(STDOUT_FILENO);
-    pthread_exit(&status);
+    nle_yield(TRUE);
 }
 
 void
@@ -245,13 +238,11 @@ nle_start()
 {
     init_nle_globals();
 
-    oldin = dup(STDIN_FILENO);
-    oldout = dup(STDOUT_FILENO);
+    int oldin = dup(STDIN_FILENO);
+    int oldout = dup(STDOUT_FILENO);
 
     dup2(nle.inpipe[0], STDIN_FILENO);
     dup2(nle.outpipe[1], STDOUT_FILENO);
-
-    pipe(read_stop_pipe);
 
     close(nle.inpipe[0]);
     close(nle.outpipe[1]);
@@ -266,26 +257,40 @@ nle_start()
     tty.c_lflag &= ~ECHO;
     tcsetattr(oldin, TCSANOW, &tty);
 
-    pthread_t thread, input_thread;
-    int rc =
-        pthread_create(&input_thread, NULL, read_thread, (void *) &oldin);
-    rc = pthread_create(&thread, NULL, mainloop, (void *) 0);
+    boolean done = FALSE;
+
+    fcontext_stack_t stack = create_fcontext_stack(STACK_SIZE);
+
+    fcontext_t generatorcontext =
+        make_fcontext(stack.sptr, stack.ssize, mainloop);
 
     ssize_t size;
     char buf[BUFSIZ];
-    while ((size = nle_get(buf, BUFSIZ)) > 0) {
-        write(oldout, buf, size);
+
+    for (;;) {
+        fcontext_transfer_t t = jump_fcontext(generatorcontext, NULL);
+        generatorcontext = t.ctx;
+        done = (t.data != NULL);
+
+        while ((size = nle_get(buf, BUFSIZ)) > 0) {
+            write(oldout, buf, size);
+            break; // FIXME
+        }
+
+        if (done)
+            break;
+
+        char i;
+        read(oldin, &i, 1);
+        write(nle.inpipe[1], &i, 1);
     }
 
     const char *message = "nle_start: Read loop finished\n\0";
     write(oldout, message, strlen(message));
 
-    pthread_join(thread, NULL);
-
-    write(read_stop_pipe[1], buf, 1);
-
-    pthread_join(input_thread, NULL);
     tcsetattr(oldin, TCSANOW, &old);
+
+    destroy_fcontext_stack(&stack);
 }
 
 /* From unixtty.c */
