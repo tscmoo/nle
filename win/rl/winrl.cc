@@ -20,7 +20,7 @@ extern "C" {
 #include "wintty.h"
 }
 
-#define USE_DEBUG_API 0
+#define USE_DEBUG_API 1
 
 #if USE_DEBUG_API
 #define DEBUG_API(x)    \
@@ -489,7 +489,10 @@ NetHackRL::getch_method()
     // zmq_socket_.send(observation_message());
     nle_yield(FALSE);
 
-    return tty_nhgetch();
+    action = tty_nhgetch();
+    DEBUG_API("getch_method: action=" << action << ", xwaitingforspace="
+                                      << xwaitingforspace << std::endl);
+    return action;
 }
 
 void
@@ -931,7 +934,6 @@ NetHackRL::rl_nhgetch()
 {
     DEBUG_API("rl_nhgetch" << std::endl);
     ScopedStack s(win_proc_calls, "nhgetch");
-    fflush(stdout);
     int i = instance->getch_method();
     return i;
 }

@@ -91,7 +91,7 @@ def read_header(fd, peek=False, no_input=False):
         else:
             sec, usec, length, channel = struct.unpack("<iiiB", header)
 
-        if sec < 0 or usec < 0 or length < 1 or channel not in (0, 1):
+        if sec < 0 or usec < 0 or channel not in (0, 1):
             raise IOError("Illegal header %s" % ((sec, usec, length, channel),))
         timestamp = sec + usec * 1e-6
         yield timestamp, length, channel

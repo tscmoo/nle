@@ -2,7 +2,7 @@
 #ifndef NLE_H
 #define NLE_H
 
-// TODO: Fix this.
+/* TODO: Fix this. */
 #undef SIG_RET_TYPE
 #define SIG_RET_TYPE void (*)(int)
 
@@ -11,6 +11,7 @@ struct nle_globals {
     int outpipe[2]; /* pipe replacing stdout */
     FILE *in;
     FILE *out;
+    FILE *ttyrec;
 };
 
 void nle_start();

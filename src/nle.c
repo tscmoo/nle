@@ -1,4 +1,7 @@
-#include <pthread.h>
+
+#include <assert.h>
+#include <sys/time.h>
+
 #include <signal.h>
 #include <string.h>
 #include <termios.h>
@@ -96,8 +99,15 @@ init_nle_globals()
 {
     pipe(nle.inpipe);
     pipe(nle.outpipe);
+
     nle.in = fdopen(nle.inpipe[0], "r");
     nle.out = fdopen(nle.inpipe[1], "w");
+
+    nle.ttyrec = fopen("nle.ttyrec", "w");
+    assert(nle.ttyrec != NULL);
+
+    /* Set ttyrec file to be line buffered. */
+    setvbuf(nle.ttyrec, NULL, _IOLBF, 0);
 }
 
 // Move to .h
@@ -189,15 +199,76 @@ mainloop(fcontext_transfer_t ctx_t)
     moveloop(resuming);
 }
 
-int nle_putchar(c) int c;
+boolean
+write_header(int length, unsigned char channel)
 {
-    return putc(c, nle.out);
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+
+    int buffer[3];
+    buffer[0] = tv.tv_sec;
+    buffer[1] = tv.tv_usec;
+    buffer[2] = length;
+
+    /* Assumes little endianness */
+    if (fwrite(buffer, sizeof(int), 3, nle.ttyrec) == 0) {
+        assert(FALSE);
+        return FALSE;
+    }
+
+    if (fputc((int) channel, nle.ttyrec) != (int) channel) {
+        assert(FALSE);
+        return FALSE;
+    }
+
+    return TRUE;
 }
 
+/*
+ * This gets called via xputs a lot. We should probably override that.
+ */
+int nle_putchar(c) int c;
+{
+    /* return putc(c, stdout); */
+
+    write_header(1, 0);
+    return fputc(c, nle.ttyrec);
+}
+
+/*
+ * puts seems to be called only by tty_raw_print and tty_raw_print_bold.
+ * We could probably override this in winrl instead.
+ */
 int nle_puts(str) const char *str;
 {
-    // careful with newlines here.
-    return fputs(str, nle.out);
+    /* puts includes a newline, fputs doesn't */
+
+    int val = fputs(str, stdout);
+    putc('\n', stdout);
+    return val;
+
+    /*
+    write_header(strlen(str) + 1, 0);
+    int val = fputs(str, nle.ttyrec);
+    putc('\n', nle.ttyrec);
+    return val;*/
+
+    /*assert(FALSE);
+  return 0;*/
+}
+
+/*
+ * Used in place of xputs from termcap.c. Not using
+ * the tputs padding logic from tclib.c.
+ */
+void nle_xputs(str) const char *str;
+{
+    int size = strlen(str);
+    if (size == 0)
+        return;
+
+    write_header(size, 0);
+    fputs(str, nle.ttyrec);
 }
 
 /*
@@ -210,6 +281,7 @@ int nle_putc(c) int c;
 /* win/tty only calls fflush(stdout), which we ignore. */
 int nle_fflush(stream) FILE *stream;
 {
+    fflush(nle.ttyrec);
     return 0;
 }
 
@@ -239,16 +311,16 @@ nle_start()
     init_nle_globals();
 
     int oldin = dup(STDIN_FILENO);
-    int oldout = dup(STDOUT_FILENO);
+    // int oldout = dup(STDOUT_FILENO);
 
     dup2(nle.inpipe[0], STDIN_FILENO);
-    dup2(nle.outpipe[1], STDOUT_FILENO);
+    // dup2(nle.outpipe[1], STDOUT_FILENO);
 
     close(nle.inpipe[0]);
-    close(nle.outpipe[1]);
+    // close(nle.outpipe[1]);
 
     nle.inpipe[0] = STDIN_FILENO;
-    nle.outpipe[1] = STDOUT_FILENO;
+    // fnle.outpipe[1] = STDOUT_FILENO;
 
     struct termios old, tty;
     tcgetattr((int) oldin, &old);
@@ -267,15 +339,17 @@ nle_start()
     ssize_t size;
     char buf[BUFSIZ];
 
+    fcontext_transfer_t t;
+
     for (;;) {
-        fcontext_transfer_t t = jump_fcontext(generatorcontext, NULL);
+        t = jump_fcontext(generatorcontext, NULL);
         generatorcontext = t.ctx;
         done = (t.data != NULL);
 
-        while ((size = nle_get(buf, BUFSIZ)) > 0) {
+        /*while ((size = nle_get(buf, BUFSIZ)) > 0) {
             write(oldout, buf, size);
             break; // FIXME
-        }
+            }*/
 
         if (done)
             break;
@@ -283,10 +357,12 @@ nle_start()
         char i;
         read(oldin, &i, 1);
         write(nle.inpipe[1], &i, 1);
+
+        write(STDOUT_FILENO, &i, 1);
     }
 
     const char *message = "nle_start: Read loop finished\n\0";
-    write(oldout, message, strlen(message));
+    // write(oldout, message, strlen(message));
 
     tcsetattr(oldin, TCSANOW, &old);
 
