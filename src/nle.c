@@ -407,6 +407,9 @@ void
 setftty()
 {
     start_screen();
+
+    iflags.cbreak = ON;
+    iflags.echo = OFF;
 }
 
 void
