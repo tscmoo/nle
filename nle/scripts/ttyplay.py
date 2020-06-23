@@ -73,10 +73,8 @@ def wait(diff, speed, drift=0.0):
 
 def read_header(fd, peek=False, no_input=False):
     while True:
-        if no_input:
-            header = os.read(fd, 12)
-        else:
-            header = os.read(fd, 13)
+        header_len = 12 if no_input else 13
+        header = os.read(fd, header_len)
 
         if not header:
             if peek:
@@ -85,13 +83,17 @@ def read_header(fd, peek=False, no_input=False):
                 continue
             return
 
+        while peek and len(header) < header_len:
+            # Succesful, but partial read.
+            header += os.read(fd, header_len - len(header))
+
         if no_input:
             sec, usec, length = struct.unpack("<iii", header)
             channel = 0
         else:
             sec, usec, length, channel = struct.unpack("<iiiB", header)
 
-        if sec < 0 or usec < 0 or channel not in (0, 1):
+        if sec < 0 or usec < 0 or length < 0 or channel not in (0, 1):
             raise IOError("Illegal header %s" % ((sec, usec, length, channel),))
         timestamp = sec + usec * 1e-6
         yield timestamp, length, channel
