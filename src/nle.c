@@ -225,7 +225,9 @@ write_header(int length, unsigned char channel)
 }
 
 /*
- * This gets called via xputs a lot. We should probably override that.
+ * NetHack prints most of its output via putchar. Writing a header
+ * *every time* is likely not a great idea. We could provide our
+ * own buffer and write on fflush() instead.
  */
 int nle_putchar(c) int c;
 {
@@ -278,7 +280,7 @@ int nle_putc(c) int c;
 }
 */
 
-/* win/tty only calls fflush(stdout), which we ignore. */
+/* win/tty only calls fflush(stdout). */
 int nle_fflush(stream) FILE *stream;
 {
     fflush(nle.ttyrec);
@@ -293,7 +295,7 @@ size_t count;
 
 void nle_yield(done) boolean done;
 {
-    fflush(stdout);
+    fflush(nle.ttyrec);
     fcontext_transfer_t t = jump_fcontext(returncontext, (void *) done);
 
     if (!done)
