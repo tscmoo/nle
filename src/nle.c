@@ -5,8 +5,6 @@
 #include <signal.h>
 #include <string.h>
 
-#include <fcontext/fcontext.h>
-
 #define NEED_VARARGS
 #include "hack.h"
 
@@ -91,27 +89,24 @@ void sethanguphandler(handler) void FDECL((*handler), (int) );
 #endif /* ?SA_RESTART */
 }
 
-struct nle_globals nle;
-
-void
-init_nle_globals()
+nle_ctx_t *
+init_nle()
 {
-    nle.ttyrec = fopen("nle.ttyrec", "w");
-    assert(nle.ttyrec != NULL);
+    nle_ctx_t *nle = malloc(sizeof(nle_ctx_t));
 
-    nle.outbuf_write_ptr = nle.outbuf;
-    nle.outbuf_write_end = nle.outbuf + sizeof(nle.outbuf);
+    nle->ttyrec = fopen("nle.ttyrec", "w");
+    assert(nle->ttyrec != NULL);
+
+    nle->outbuf_write_ptr = nle->outbuf;
+    nle->outbuf_write_end = nle->outbuf + sizeof(nle->outbuf);
+
+    return nle;
 }
 
-// Move to .h
-fcontext_stack_t stack;
-fcontext_t returncontext;
-fcontext_t generatorcontext;
-
 void
-mainloop(fcontext_transfer_t ctx_t)
+mainloop(fcontext_transfer_t ctx_transfer)
 {
-    returncontext = ctx_t.ctx;
+    current_nle_ctx->returncontext = ctx_transfer.ctx;
 
     early_init();
 
@@ -205,13 +200,15 @@ write_header(int length, unsigned char channel)
     buffer[1] = tv.tv_usec;
     buffer[2] = length;
 
+    nle_ctx_t *nle = current_nle_ctx;
+
     /* Assumes little endianness */
-    if (fwrite(buffer, sizeof(int), 3, nle.ttyrec) == 0) {
+    if (fwrite(buffer, sizeof(int), 3, nle->ttyrec) == 0) {
         assert(FALSE);
         return FALSE;
     }
 
-    if (fputc((int) channel, nle.ttyrec) != (int) channel) {
+    if (fputc((int) channel, nle->ttyrec) != (int) channel) {
         assert(FALSE);
         return FALSE;
     }
@@ -224,20 +221,22 @@ int nle_fflush(stream) FILE *stream;
 {
     /* Only act on fflush(stdout). */
     if (stream != stdout) {
-        printf("Warning: nle_flush called with unexpected FILE pointer %d ",
-               (int) stream);
+        fprintf(stderr,
+                "Warning: nle_flush called with unexpected FILE pointer %d ",
+                (int) stream);
         return fflush(stream);
     }
+    nle_ctx_t *nle = current_nle_ctx;
 
-    ssize_t length = nle.outbuf_write_ptr - nle.outbuf;
+    ssize_t length = nle->outbuf_write_ptr - nle->outbuf;
     if (length == 0)
         return 0;
     /* TODO(heiner): Given that we do our own buffering, consider
      * using file descriptors instead of the ttyrec FILE*. */
     write_header(length, 0);
-    fwrite(nle.outbuf, 1, length, nle.ttyrec);
-    nle.outbuf_write_ptr = nle.outbuf;
-    return fflush(nle.ttyrec);
+    fwrite(nle->outbuf, 1, length, nle->ttyrec);
+    nle->outbuf_write_ptr = nle->outbuf;
+    return fflush(nle->ttyrec);
 }
 
 /*
@@ -246,10 +245,11 @@ int nle_fflush(stream) FILE *stream;
  */
 int nle_putchar(c) int c;
 {
-    if (nle.outbuf_write_ptr >= nle.outbuf_write_end) {
+    nle_ctx_t *nle = current_nle_ctx;
+    if (nle->outbuf_write_ptr >= nle->outbuf_write_end) {
         nle_fflush(stdout);
     }
-    *nle.outbuf_write_ptr++ = c;
+    *nle->outbuf_write_ptr++ = c;
     return c;
 }
 
@@ -281,10 +281,11 @@ int nle_puts(str) const char *str;
 char nle_yield(done) boolean done;
 {
     nle_fflush(stdout);
-    fcontext_transfer_t t = jump_fcontext(returncontext, (void *) done);
+    fcontext_transfer_t t =
+        jump_fcontext(current_nle_ctx->returncontext, (void *) done);
 
     if (!done)
-        returncontext = t.ctx;
+        current_nle_ctx->returncontext = t.ctx;
 
     return (char) t.data;
 }
@@ -294,37 +295,42 @@ void nethack_exit(status) int status;
     nle_yield(TRUE);
 }
 
-boolean
+nle_ctx_t *
 nle_start()
 {
-    init_nle_globals();
+    nle_ctx_t *nle = init_nle();
 
-    stack = create_fcontext_stack(STACK_SIZE);
-    generatorcontext = make_fcontext(stack.sptr, stack.ssize, mainloop);
+    nle->stack = create_fcontext_stack(STACK_SIZE);
+    nle->generatorcontext =
+        make_fcontext(nle->stack.sptr, nle->stack.ssize, mainloop);
     boolean done = FALSE;
 
-    fcontext_transfer_t t = jump_fcontext(generatorcontext, NULL);
-    generatorcontext = t.ctx;
-    done = (t.data != NULL);
+    current_nle_ctx = nle;
+    fcontext_transfer_t t = jump_fcontext(nle->generatorcontext, NULL);
+    nle->generatorcontext = t.ctx;
+    nle->done = (t.data != NULL);
 
-    return done;
+    return nle; // TODO: Continue.
 }
 
-boolean
-nle_step(char action)
+nle_ctx_t *
+nle_step(nle_ctx_t *nle, char action)
 {
-    fcontext_transfer_t t = jump_fcontext(generatorcontext, (void *) action);
-    generatorcontext = t.ctx;
-    boolean done = (t.data != NULL);
+    current_nle_ctx = nle;
+    fcontext_transfer_t t =
+        jump_fcontext(nle->generatorcontext, (void *) action);
+    nle->generatorcontext = t.ctx;
+    nle->done = (t.data != NULL);
 
-    return done;
+    return nle;
 }
 
 void
-nle_end()
+nle_end(nle_ctx_t *nle)
 {
-    destroy_fcontext_stack(&stack);
-    fclose(nle.ttyrec);
+    destroy_fcontext_stack(&nle->stack);
+    fclose(nle->ttyrec);
+    free(nle);
 }
 
 /* From unixtty.c */

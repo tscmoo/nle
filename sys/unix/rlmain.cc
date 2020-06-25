@@ -1,5 +1,6 @@
 
 #include <cstring>
+#include <iostream>
 #include <termios.h>
 
 extern "C" {
@@ -24,14 +25,14 @@ main(int argc, char **argv)
     tty.c_lflag &= ~ECHO;
     tcsetattr(STDIN_FILENO, TCSANOW, &tty);
 
-    bool done = nle_start();
+    nle_ctx_t *nle = nle_start();
 
     char i;
-    while (!done) {
+    while (!nle->done) {
         read(STDIN_FILENO, &i, 1);
-        done = nle_step(i);
+        nle = nle_step(nle, i);
     }
-    nle_end();
+    nle_end(nle);
 
     tcsetattr(STDIN_FILENO, TCSANOW, &old);
 }

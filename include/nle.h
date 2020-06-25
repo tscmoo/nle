@@ -1,22 +1,29 @@
-
 #ifndef NLE_H
 #define NLE_H
+
+#include <fcontext/fcontext.h>
 
 /* TODO: Fix this. */
 #undef SIG_RET_TYPE
 #define SIG_RET_TYPE void (*)(int)
 
-struct nle_globals {
+typedef struct nle_globals {
+    fcontext_stack_t stack;
+    fcontext_t returncontext;
+    fcontext_t generatorcontext;
+
+    boolean done;
+
     FILE *ttyrec;
     char outbuf[BUFSIZ];
     char *outbuf_write_ptr;
     char *outbuf_write_end;
-};
+} nle_ctx_t;
 
-boolean nle_start();
-boolean nle_step(char);
-void nle_end();
+__thread nle_ctx_t *current_nle_ctx;
 
-extern struct nle_globals nle;
+nle_ctx_t *nle_start();
+nle_ctx_t *nle_step(nle_ctx_t *, char);
+void nle_end(nle_ctx_t *);
 
 #endif /* NLE_H */
