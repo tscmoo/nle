@@ -7,10 +7,7 @@
 #include <stdio.h>
 #include <string>
 #include <unistd.h>
-
-#include "message_generated.h"
-#include <flatbuffers/flatbuffers.h>
-#include <zmq.hpp>
+#include <vector>
 
 extern "C" {
 #include "hack.h"
@@ -81,7 +78,6 @@ class NetHackRL
 {
   public:
     NetHackRL(int &argc, char **argv);
-    ~NetHackRL();
 
     static void rl_init_nhwindows(int *argc, char **argv);
     static void rl_player_selection();
@@ -200,278 +196,17 @@ class NetHackRL
     void clear_nhwindow_method(winid wid);
     void display_nhwindow_method(winid wid, BOOLEAN_P block);
     void destroy_nhwindow_method(winid wid);
-
-    zmq::message_t observation_message();
-
-    std::string socket_address_;
-    zmq::context_t zmq_context_;
-    zmq::socket_t zmq_socket_;
 };
 
 std::unique_ptr<NetHackRL> NetHackRL::instance =
     std::unique_ptr<NetHackRL>(nullptr);
 
-NetHackRL::NetHackRL(int &argc, char **argv)
-    : glyphs_(), zmq_context_(1), zmq_socket_(zmq_context_, ZMQ_PUSH)
+NetHackRL::NetHackRL(int &argc, char **argv) : glyphs_()
 {
-    std::string hackdir(getcwd(0, 255));
-    socket_address_ =
-        "ipc://" + hackdir + "/" + std::to_string(getpid()) + ".nle.sock";
-    zmq_socket_.bind(socket_address_);
-
     // create base window
     // (done in tty_init_nhwindows before this NetHackRL object got created).
     assert(BASE_WINDOW == 0);
     windows_.emplace_back(new rl_window({ NHW_BASE }));
-}
-
-NetHackRL::~NetHackRL()
-{
-    flatbuffers::FlatBufferBuilder builder(1024);
-    auto fb_response =
-        nle::fbs::CreateMessage(builder, 0, 0, 0, 0, 0, 0, 0, true);
-    builder.Finish(fb_response);
-
-    zmq::message_t reply(builder.GetSize());
-    memcpy(reply.data(), builder.GetBufferPointer(), builder.GetSize());
-    // zmq_socket_.send(reply);
-
-    zmq_socket_.unbind(socket_address_);
-}
-
-zmq::message_t
-NetHackRL::observation_message()
-{
-    // Assumes mutex is held.
-    flatbuffers::FlatBufferBuilder builder(1024);
-
-    std::vector<flatbuffers::Offset<nle::fbs::Window> > windows_vector;
-
-    for (const auto &rl_win : windows_) {
-        if (!rl_win)
-            continue;
-
-        flatbuffers::Offset<
-            flatbuffers::Vector<flatbuffers::Offset<flatbuffers::String> > >
-            fb_strings;
-        flatbuffers::Offset<
-            flatbuffers::Vector<flatbuffers::Offset<nle::fbs::MenuItem> > >
-            fb_items;
-
-        std::vector<flatbuffers::Offset<flatbuffers::String> > strings_vector;
-        for (const std::string &str : rl_win->strings) {
-            strings_vector.push_back(builder.CreateString(str));
-        }
-        if (!strings_vector.empty()) {
-            fb_strings = builder.CreateVector(strings_vector);
-        }
-
-        std::vector<flatbuffers::Offset<nle::fbs::MenuItem> > items_vector;
-        for (const rl_menu_item &item : rl_win->menu_items) {
-            auto fb_str = builder.CreateString(item.str);
-            auto fb_item = nle::fbs::CreateMenuItem(
-                builder, item.glyph, item.selector, item.gselector, fb_str,
-                item.selected);
-            items_vector.push_back(fb_item);
-        }
-        if (!items_vector.empty()) {
-            fb_items = builder.CreateVector(items_vector);
-        }
-
-        windows_vector.push_back(nle::fbs::CreateWindow(
-            builder, rl_win->type, fb_items, fb_strings));
-    }
-    auto fb_windows = builder.CreateVector(windows_vector);
-
-    auto fb_seeds = nle::fbs::Seeds(nle_seeds[0], nle_seeds[1]);
-
-    auto fb_program_state = nle::fbs::ProgramState(
-        g.program_state.gameover, g.program_state.panicking,
-        g.program_state.exiting, g.program_state.in_moveloop,
-        g.program_state.in_impossible);
-
-    if (!g.program_state.in_moveloop) {
-        // TODO: Consider exporting some data before in_moveloop is set.
-        // (e.g., stats are up before moon phase check).
-        // TODO: Different handling of end-of-game states?
-        auto fb_response = nle::fbs::CreateMessage(
-            builder, 0, 0, 0, fb_windows, 0, &fb_program_state, &fb_seeds);
-        builder.Finish(fb_response);
-
-        zmq::message_t reply(builder.GetSize());
-        memcpy(reply.data(), builder.GetBufferPointer(), builder.GetSize());
-        return reply;
-    }
-
-    // Condition
-    auto fb_condition = nle::fbs::Condition(
-        (condition_bits_ & BL_MASK_STONE) == BL_MASK_STONE,
-        (condition_bits_ & BL_MASK_SLIME) == BL_MASK_SLIME,
-        (condition_bits_ & BL_MASK_STRNGL) == BL_MASK_STRNGL,
-        (condition_bits_ & BL_MASK_FOODPOIS) == BL_MASK_FOODPOIS,
-        (condition_bits_ & BL_MASK_TERMILL) == BL_MASK_TERMILL,
-        (condition_bits_ & BL_MASK_BLIND) == BL_MASK_BLIND,
-        (condition_bits_ & BL_MASK_DEAF) == BL_MASK_DEAF,
-        (condition_bits_ & BL_MASK_STUN) == BL_MASK_STUN,
-        (condition_bits_ & BL_MASK_CONF) == BL_MASK_CONF,
-        (condition_bits_ & BL_MASK_HALLU) == BL_MASK_HALLU,
-        (condition_bits_ & BL_MASK_LEV) == BL_MASK_LEV,
-        (condition_bits_ & BL_MASK_FLY) == BL_MASK_FLY,
-        (condition_bits_ & BL_MASK_RIDE) == BL_MASK_RIDE);
-
-    // Status
-    auto fb_status = nle::fbs::CreateStatus(
-        builder, builder.CreateString(status_[BL_TITLE]),
-        builder.CreateString(status_[BL_STR]),
-        builder.CreateString(status_[BL_DX]),
-        builder.CreateString(status_[BL_CO]),
-        builder.CreateString(status_[BL_IN]),
-        builder.CreateString(status_[BL_WI]),
-        builder.CreateString(status_[BL_CH]), /* 1..6 */
-        builder.CreateString(status_[BL_ALIGN]),
-        builder.CreateString(status_[BL_SCORE]),
-        builder.CreateString(status_[BL_CAP]),
-        builder.CreateString(status_[BL_GOLD]),
-        builder.CreateString(status_[BL_ENE]),
-        builder.CreateString(status_[BL_ENEMAX]), /* 7..12 */
-        builder.CreateString(status_[BL_XP]),
-        builder.CreateString(status_[BL_AC]),
-        builder.CreateString(status_[BL_HD]),
-        builder.CreateString(status_[BL_TIME]),
-        builder.CreateString(status_[BL_HUNGER]),
-        builder.CreateString(status_[BL_HP]),
-        builder.CreateString(status_[BL_HPMAX]),
-        builder.CreateString(status_[BL_LEVELDESC]),
-        builder.CreateString(status_[BL_EXP]), &fb_condition);
-
-    // NDArray for glyphs
-    const std::vector<int64_t> shape = { ROWNO, COLNO - 1 };
-    auto fb_shape = builder.CreateVector(shape);
-    auto fb_data =
-        builder.CreateVector(reinterpret_cast<uint8_t *>(glyphs_.data()),
-                             glyphs_.size() * sizeof(int16_t));
-    int dtype = 3; // np.dtype("int16").num == 3; np.typeDict[3] == np.int16
-    auto fb_glyphs =
-        nle::fbs::CreateNDArray(builder, fb_shape, dtype, fb_data);
-
-    // NDArray for chars
-    fb_shape = builder.CreateVector(shape);
-    dtype = 2; // np.dtype("uint8").num == 3; np.typeDict[3] == np.uint8
-    fb_data =
-        builder.CreateVector(chars_.data(), chars_.size() * sizeof(uint8_t));
-    // TODO(heiner): Use gbuf instead, or drop glyphs entirely.
-    auto fb_chars =
-        nle::fbs::CreateNDArray(builder, fb_shape, dtype, fb_data);
-
-    // NDArray for colors
-    fb_shape = builder.CreateVector(shape);
-    dtype = 2; // np.dtype("uint8").num == 3; np.typeDict[3] == np.uint8
-    fb_data = builder.CreateVector(colors_.data(),
-                                   colors_.size() * sizeof(uint8_t));
-    auto fb_colors =
-        nle::fbs::CreateNDArray(builder, fb_shape, dtype, fb_data);
-
-    // NDArray for colors
-    fb_shape = builder.CreateVector(shape);
-    dtype = 2; // np.dtype("uint8").num == 3; np.typeDict[3] == np.uint8
-    fb_data = builder.CreateVector(specials_.data(),
-                                   specials_.size() * sizeof(uint8_t));
-    auto fb_specials =
-        nle::fbs::CreateNDArray(builder, fb_shape, dtype, fb_data);
-
-    // Inventory
-    std::vector<flatbuffers::Offset<nle::fbs::InventoryItem> >
-        inventory_vector;
-
-    for (const rl_inventory_item &item : inventory_) {
-        auto fb_str = builder.CreateString(item.str);
-        auto fb_class_name = builder.CreateString(item.object_class_name);
-        auto fb_item = nle::fbs::CreateInventoryItem(
-            builder, item.glyph, fb_str, item.letter, item.object_class,
-            fb_class_name);
-        inventory_vector.push_back(fb_item);
-    }
-    auto fb_inventory = builder.CreateVector(inventory_vector);
-
-    auto fb_observation =
-        nle::fbs::CreateObservation(builder, fb_glyphs, fb_chars, fb_colors,
-                                    fb_specials, fb_status, fb_inventory);
-
-    // Blstats
-    int16_t hitpoints;
-
-    /* See botl.c. */
-    int i = Upolyd ? u.mh : u.uhp;
-    if (i < 0)
-        i = 0;
-
-    hitpoints = min(i, 9999);
-
-    int16_t max_hitpoints;
-    i = Upolyd ? u.mhmax : u.uhpmax;
-    max_hitpoints = min(i, 9999);
-
-    auto fb_blstats = nle::fbs::Blstats(
-        /* Cf. botl.c. */
-        u.ux - 1,            /* x coordinate, 1 <= ux <= cols */
-        u.uy,                /* y coordinate, 0 <= uy < rows */
-        ACURRSTR,            /* strength_percentage */
-        ACURR(A_STR),        /* strength          */
-        ACURR(A_DEX),        /* dexterity         */
-        ACURR(A_CON),        /* constitution      */
-        ACURR(A_INT),        /* intelligence      */
-        ACURR(A_WIS),        /* wisdom            */
-        ACURR(A_CHA),        /* charisma          */
-        botl_score(),        /* score             */
-        hitpoints,           /* hitpoints         */
-        max_hitpoints,       /* max_hitpoints     */
-        depth(&u.uz),        /* depth             */
-        money_cnt(g.invent), /* gold              */
-        min(u.uen, 9999),    /* energy            */
-        min(u.uenmax, 9999), /* max_energy        */
-        u.uac,               /* armor_class       */
-        Upolyd ? (int) mons[u.umonnum].mlevel : 0, /* monster_level     */
-        u.ulevel,                                  /* experience_level  */
-        u.uexp,                                    /* experience_points */
-        g.moves,                                   /* time              */
-        u.uhs,                                     /* hunger state      */
-        near_capacity()                            /* carrying_capacity */
-    );
-
-    auto fb_you =
-        nle::fbs::You(u.ux, u.uy, u.ux0, u.uy0, { u.uz.dnum, u.uz.dlevel },
-                      { u.uz0.dnum, u.uz0.dlevel }, u.uhunger);
-
-    /* Potential additional data  in internal:
-     * mvitals  (born/vanquished monsters)
-     */
-
-    flatbuffers::Offset<flatbuffers::String> fb_killer_name = 0;
-
-    if (g.program_state.gameover && g.killer.name[0] != 0)
-        fb_killer_name = builder.CreateString(g.killer.name);
-
-    auto fb_call_stack = builder.CreateVectorOfStrings(
-        { win_proc_calls.begin(), win_proc_calls.end() });
-
-    // From do.c. g.sstairs is a potential "special" staircase.
-    boolean stairs_down =
-        ((u.ux == xdnstair && u.uy == ydnstair)
-         || (u.ux == g.sstairs.sx && u.uy == g.sstairs.sy && !g.sstairs.up));
-
-    auto fb_internal = nle::fbs::CreateInternal(
-        builder, deepest_lev_reached(false), fb_call_stack, fb_killer_name,
-        xwaitingforspace, stairs_down);
-
-    auto fb_response = nle::fbs::CreateMessage(
-        builder, fb_observation, &fb_blstats, &fb_you, fb_windows,
-        fb_internal, &fb_program_state, &fb_seeds, false);
-
-    builder.Finish(fb_response);
-
-    zmq::message_t reply(builder.GetSize());
-    memcpy(reply.data(), builder.GetBufferPointer(), builder.GetSize());
-    return reply;
 }
 
 void
