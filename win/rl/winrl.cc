@@ -17,7 +17,7 @@ extern "C" {
 #include "wintty.h"
 }
 
-#define USE_DEBUG_API 1
+#define USE_DEBUG_API 0
 
 #if USE_DEBUG_API
 #define DEBUG_API(x)    \
@@ -657,7 +657,11 @@ NetHackRL::rl_raw_print(const char *str)
 {
     DEBUG_API("rl_raw_print" << std::endl);
     ScopedStack s(win_proc_calls, "raw_print");
-    tty_raw_print(str);
+    /* Not calling tty_raw_print(str); here or below as that
+       uses puts/fputs. */
+    xputs(str);
+    putchar('\n');
+    fflush(stdout);
 }
 
 void
@@ -665,7 +669,10 @@ NetHackRL::rl_raw_print_bold(const char *str)
 {
     DEBUG_API("rl_raw_print_bold" << std::endl);
     ScopedStack s(win_proc_calls, "raw_bold_print");
-    tty_raw_print_bold(str);
+    /* Not calling tty_raw_print_bold(str);, so above. */
+    xputs(str);
+    putchar('\n');
+    fflush(stdout);
 }
 
 int

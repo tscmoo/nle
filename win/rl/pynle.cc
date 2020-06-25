@@ -37,7 +37,7 @@ class NLE
         nle_end(nle_);
     }
     void
-    step(char action)
+    step(int action)
     {
         nle_ = nle_step(nle_, action);
     }

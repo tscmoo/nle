@@ -1,6 +1,18 @@
 cmake_minimum_required(VERSION 3.10)
 project(libnethack)
 
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+  message("Debug build.")
+  # Unclear if this is even necessary. `dsymutil rlmain -o rlmain.dSYM` seems to
+  # have done the trick.
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
+  set(CMAKE_XCODE_ATTRIBUTE_DEBUG_INFORMATION_FORMAT "dwarf-with-dsym")
+elseif(CMAKE_BUILD_TYPE MATCHES Release)
+  message("Release build.")
+else()
+  message("Some other build type.")
+endif()
+
 add_compile_definitions(
   GCC_WARN
   NOCLIPPING

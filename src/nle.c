@@ -262,6 +262,9 @@ void nle_xputs(str) const char *str;
     int c;
     const char *p = str;
 
+    if (!p || !*p)
+        return;
+
     while ((c = *p++) != '\0') {
         nle_putchar(c);
     }
@@ -313,7 +316,7 @@ nle_start()
 }
 
 nle_ctx_t *
-nle_step(nle_ctx_t *nle, char action)
+nle_step(nle_ctx_t *nle, int action)
 {
     current_nle_ctx = nle;
     fcontext_transfer_t t =

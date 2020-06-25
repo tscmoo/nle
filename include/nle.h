@@ -23,7 +23,7 @@ typedef struct nle_globals {
 __thread nle_ctx_t *current_nle_ctx;
 
 nle_ctx_t *nle_start();
-nle_ctx_t *nle_step(nle_ctx_t *, char);
+nle_ctx_t *nle_step(nle_ctx_t *, int);
 void nle_end(nle_ctx_t *);
 
 #endif /* NLE_H */
