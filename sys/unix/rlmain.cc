@@ -24,15 +24,11 @@ main(int argc, char **argv)
     tty.c_lflag &= ~ECHO;
     tcsetattr(STDIN_FILENO, TCSANOW, &tty);
 
-    bool done;
-
-    int oldin = dup(STDIN_FILENO);
-
-    done = nle_start();
+    bool done = nle_start();
 
     char i;
     while (!done) {
-        read(oldin, &i, 1);
+        read(STDIN_FILENO, &i, 1);
         done = nle_step(i);
     }
     nle_end();

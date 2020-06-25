@@ -96,8 +96,6 @@ struct nle_globals nle;
 void
 init_nle_globals()
 {
-    pipe(nle.inpipe);
-
     nle.ttyrec = fopen("nle.ttyrec", "w");
     assert(nle.ttyrec != NULL);
 
@@ -275,20 +273,20 @@ void nle_xputs(str) const char *str;
  */
 int nle_puts(str) const char *str;
 {
-    /* puts includes a newline, fputs doesn't */
-
     int val = fputs(str, stdout);
-    putc('\n', stdout);
+    putc('\n', stdout); /* puts includes a newline, fputs doesn't */
     return val;
 }
 
-void nle_yield(done) boolean done;
+char nle_yield(done) boolean done;
 {
     nle_fflush(stdout);
     fcontext_transfer_t t = jump_fcontext(returncontext, (void *) done);
 
     if (!done)
         returncontext = t.ctx;
+
+    return (char) t.data;
 }
 
 void nethack_exit(status) int status;
@@ -296,17 +294,10 @@ void nethack_exit(status) int status;
     nle_yield(TRUE);
 }
 
-int oldin;
-
 boolean
 nle_start()
 {
     init_nle_globals();
-
-    oldin = dup(STDIN_FILENO);
-    dup2(nle.inpipe[0], STDIN_FILENO);
-    close(nle.inpipe[0]);
-    nle.inpipe[0] = STDIN_FILENO;
 
     stack = create_fcontext_stack(STACK_SIZE);
     generatorcontext = make_fcontext(stack.sptr, stack.ssize, mainloop);
@@ -322,9 +313,7 @@ nle_start()
 boolean
 nle_step(char action)
 {
-    write(nle.inpipe[1], &action, 1);
-
-    fcontext_transfer_t t = jump_fcontext(generatorcontext, NULL);
+    fcontext_transfer_t t = jump_fcontext(generatorcontext, (void *) action);
     generatorcontext = t.ctx;
     boolean done = (t.data != NULL);
 
@@ -334,10 +323,7 @@ nle_step(char action)
 void
 nle_end()
 {
-    dup2(oldin, STDIN_FILENO);
     destroy_fcontext_stack(&stack);
-
-    close(nle.inpipe[1]);
     fclose(nle.ttyrec);
 }
 

@@ -52,7 +52,7 @@ extern bool xwaitingforspace;
 extern unsigned long nle_seeds[];
 
 extern "C" {
-extern void nle_yield(boolean);
+extern char nle_yield(boolean);
 }
 
 namespace nethack_rl
@@ -483,16 +483,20 @@ NetHackRL::player_selection_method()
 int
 NetHackRL::getch_method()
 {
-    int action;
-    zmq::message_t request;
+    int i = nle_yield(FALSE);
 
-    // zmq_socket_.send(observation_message());
-    nle_yield(FALSE);
+    /* NOT calling tty_nhgetch() but instead getting the input from
+       the context switch. No stdin required. The following code is from
+       tty_nhgetch. We don't copy the conditional ttyDisplay->toplin = 2
+       as it this seems to relate to something happening with stdin. */
+    if (!i)
+        i = '\033'; /* map NUL to ESC since nethack doesn't expect NUL */
+    else if (i == EOF)
+        i = '\033'; /* same for EOF */
 
-    action = tty_nhgetch();
-    DEBUG_API("getch_method: action=" << action << ", xwaitingforspace="
+    DEBUG_API("getch_method: action=" << i << ", xwaitingforspace="
                                       << xwaitingforspace << std::endl);
-    return action;
+    return i;
 }
 
 void

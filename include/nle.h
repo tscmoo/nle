@@ -7,8 +7,6 @@
 #define SIG_RET_TYPE void (*)(int)
 
 struct nle_globals {
-    int inpipe[2]; /* pipe replacing stdin */
-    FILE *in;
     FILE *ttyrec;
     char outbuf[BUFSIZ];
     char *outbuf_write_ptr;
