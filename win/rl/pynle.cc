@@ -4,11 +4,17 @@
 // "digit" is declared in both Python's longintrepr.h and NetHack's extern.h.
 #define digit nethack_digit
 
+extern "C" {
 #include "hack.h"
 #include "permonst.h"
 #include "pm.h" // File generated during NetHack compilation.
 #include "rm.h"
+}
 #include "wintty.h"
+
+extern "C" {
+#include "nle.h"
+}
 
 // Undef name clashes between NetHack and Python.
 #undef yn
@@ -20,9 +26,39 @@ extern const struct class_sym def_monsyms[MAXMCLASSES];
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(helper, m)
+class NLE
 {
-    m.doc() = "Helper constants and functions for NetHackRL";
+  public:
+    NLE() : nle_(nle_start())
+    {
+    }
+    ~NLE()
+    {
+        nle_end(nle_);
+    }
+    void
+    step(char action)
+    {
+        nle_ = nle_step(nle_, action);
+    }
+    bool
+    done()
+    {
+        return nle_->done;
+    }
+
+  private:
+    nle_ctx_t *nle_;
+};
+
+PYBIND11_MODULE(pynle, m)
+{
+    m.doc() = "The NetHack Learning Environment";
+
+    py::class_<NLE>(m, "NLE")
+        .def(py::init<>())
+        .def("step", &NLE::step, py::arg("action"))
+        .def("done", &NLE::done);
 
     m.attr("NHW_MESSAGE") = py::int_(NHW_MESSAGE);
     m.attr("NHW_STATUS") = py::int_(NHW_STATUS);
@@ -155,7 +191,7 @@ PYBIND11_MODULE(helper, m)
         .def_readonly("name", &class_sym::name)
         .def_readonly("explain", &class_sym::explain)
         .def("__repr__", [](const class_sym &cs) {
-            return "<nethack.helper.class_sym sym='" + std::string(1, cs.sym)
+            return "<nethack.pynle.class_sym sym='" + std::string(1, cs.sym)
                    + "' explain='" + std::string(cs.explain) + "'>";
         });
 

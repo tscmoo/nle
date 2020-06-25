@@ -7,7 +7,7 @@ add_compile_definitions(
   NOMAIL
   NOTPARMDECL
   HACKDIR="/Users/hnr/nethackdir"
-  DEFAULT_WINDOW_SYS="tty"
+  DEFAULT_WINDOW_SYS="rl"
   DLB)
 
 file(
@@ -32,7 +32,13 @@ target_include_directories(nethack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
 target_link_directories(nethack PUBLIC /usr/local/lib)
 target_link_libraries(nethack PUBLIC ncurses m lua fcontext)
 
+# rlmain C++ (test) binary
 add_executable(rlmain "sys/unix/rlmain.cc")
 set_target_properties(rlmain PROPERTIES CXX_STANDARD 11)
-
 target_link_libraries(rlmain PUBLIC nethack)
+
+# pybind11 python library.
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/third_party/pybind11)
+pybind11_add_module(pynle win/rl/pynle.cc)
+target_link_libraries(pynle PUBLIC nethack)
+set_target_properties(pynle PROPERTIES CXX_STANDARD 14)

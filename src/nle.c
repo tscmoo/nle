@@ -113,7 +113,7 @@ mainloop(fcontext_transfer_t ctx_transfer)
     g.hname = "nethack";
     g.hackpid = getpid();
 
-    choose_windows(DEFAULT_WINDOW_SYS);
+    choose_windows("rl");
 
     const char *dir = HACKDIR;
     if (dir && chdir(dir) < 0) {
@@ -303,14 +303,13 @@ nle_start()
     nle->stack = create_fcontext_stack(STACK_SIZE);
     nle->generatorcontext =
         make_fcontext(nle->stack.sptr, nle->stack.ssize, mainloop);
-    boolean done = FALSE;
 
     current_nle_ctx = nle;
     fcontext_transfer_t t = jump_fcontext(nle->generatorcontext, NULL);
     nle->generatorcontext = t.ctx;
     nle->done = (t.data != NULL);
 
-    return nle; // TODO: Continue.
+    return nle;
 }
 
 nle_ctx_t *
