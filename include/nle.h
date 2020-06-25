@@ -12,6 +12,9 @@ struct nle_globals {
     FILE *in;
     FILE *out;
     FILE *ttyrec;
+    char outbuf[BUFSIZ];
+    char *outbuf_write_ptr;
+    char *outbuf_write_end;
 };
 
 void nle_start();

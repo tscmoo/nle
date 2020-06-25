@@ -106,8 +106,8 @@ init_nle_globals()
     nle.ttyrec = fopen("nle.ttyrec", "w");
     assert(nle.ttyrec != NULL);
 
-    /* Set ttyrec file to be line buffered. */
-    setvbuf(nle.ttyrec, NULL, _IOLBF, 0);
+    nle.outbuf_write_ptr = nle.outbuf;
+    nle.outbuf_write_end = nle.outbuf + sizeof(nle.outbuf);
 }
 
 // Move to .h
@@ -224,17 +224,50 @@ write_header(int length, unsigned char channel)
     return TRUE;
 }
 
+/* win/tty only calls fflush(stdout). */
+int nle_fflush(stream) FILE *stream;
+{
+    /* Only act on fflush(stdout). */
+    if (stream != stdout) {
+        printf("Warning: nle_flush called with unexpected FILE pointer %d ",
+               (int) stream);
+        return fflush(stream);
+    }
+
+    ssize_t length = nle.outbuf_write_ptr - nle.outbuf;
+    if (length == 0)
+        return 0;
+    write_header(length, 0);
+    fwrite(nle.outbuf, 1, length, nle.ttyrec);
+    nle.outbuf_write_ptr = nle.outbuf;
+    return fflush(nle.ttyrec);
+}
+
 /*
- * NetHack prints most of its output via putchar. Writing a header
- * *every time* is likely not a great idea. We could provide our
- * own buffer and write on fflush() instead.
+ * NetHack prints most of its output via putchar. We do our
+ * own buffering.
  */
 int nle_putchar(c) int c;
 {
-    /* return putc(c, stdout); */
+    if (nle.outbuf_write_ptr >= nle.outbuf_write_end) {
+        nle_fflush(stdout);
+    }
+    *nle.outbuf_write_ptr++ = c;
+    return c;
+}
 
-    write_header(1, 0);
-    return fputc(c, nle.ttyrec);
+/*
+ * Used in place of xputs from termcap.c. Not using
+ * the tputs padding logic from tclib.c.
+ */
+void nle_xputs(str) const char *str;
+{
+    int c;
+    const char *p = str;
+
+    while ((c = *p++) != '\0') {
+        nle_putchar(c);
+    }
 }
 
 /*
@@ -259,33 +292,6 @@ int nle_puts(str) const char *str;
   return 0;*/
 }
 
-/*
- * Used in place of xputs from termcap.c. Not using
- * the tputs padding logic from tclib.c.
- */
-void nle_xputs(str) const char *str;
-{
-    int size = strlen(str);
-    if (size == 0)
-        return;
-
-    write_header(size, 0);
-    fputs(str, nle.ttyrec);
-}
-
-/*
-int nle_putc(c) int c;
-{
-    return putc(c, nle.out);
-}
-*/
-
-/* win/tty only calls fflush(stdout). */
-int nle_fflush(stream) FILE *stream;
-{
-    fflush(nle.ttyrec);
-    return 0;
-}
 
 ssize_t nle_get(buf, count) void *buf;
 size_t count;
@@ -295,7 +301,7 @@ size_t count;
 
 void nle_yield(done) boolean done;
 {
-    fflush(nle.ttyrec);
+    nle_fflush(stdout);
     fcontext_transfer_t t = jump_fcontext(returncontext, (void *) done);
 
     if (!done)

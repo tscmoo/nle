@@ -83,7 +83,7 @@ def read_header(fd, peek=False, no_input=False):
                 continue
             return
 
-        while peek and len(header) < header_len:
+        while len(header) < header_len:
             # Succesful, but partial read.
             header += os.read(fd, header_len - len(header))
 
