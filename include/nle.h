@@ -7,17 +7,17 @@
 #define SIG_RET_TYPE void (*)(int)
 
 struct nle_globals {
-    int inpipe[2];  /* pipe replacing stdin */
-    int outpipe[2]; /* pipe replacing stdout */
+    int inpipe[2]; /* pipe replacing stdin */
     FILE *in;
-    FILE *out;
     FILE *ttyrec;
     char outbuf[BUFSIZ];
     char *outbuf_write_ptr;
     char *outbuf_write_end;
 };
 
-void nle_start();
+boolean nle_start();
+boolean nle_step(char);
+void nle_end();
 
 extern struct nle_globals nle;
 

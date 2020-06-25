@@ -4,7 +4,6 @@
 
 #include <signal.h>
 #include <string.h>
-#include <termios.h>
 
 #include <fcontext/fcontext.h>
 
@@ -98,10 +97,6 @@ void
 init_nle_globals()
 {
     pipe(nle.inpipe);
-    pipe(nle.outpipe);
-
-    nle.in = fdopen(nle.inpipe[0], "r");
-    nle.out = fdopen(nle.inpipe[1], "w");
 
     nle.ttyrec = fopen("nle.ttyrec", "w");
     assert(nle.ttyrec != NULL);
@@ -111,7 +106,9 @@ init_nle_globals()
 }
 
 // Move to .h
+fcontext_stack_t stack;
 fcontext_t returncontext;
+fcontext_t generatorcontext;
 
 void
 mainloop(fcontext_transfer_t ctx_t)
@@ -237,6 +234,8 @@ int nle_fflush(stream) FILE *stream;
     ssize_t length = nle.outbuf_write_ptr - nle.outbuf;
     if (length == 0)
         return 0;
+    /* TODO(heiner): Given that we do our own buffering, consider
+     * using file descriptors instead of the ttyrec FILE*. */
     write_header(length, 0);
     fwrite(nle.outbuf, 1, length, nle.ttyrec);
     nle.outbuf_write_ptr = nle.outbuf;
@@ -281,22 +280,6 @@ int nle_puts(str) const char *str;
     int val = fputs(str, stdout);
     putc('\n', stdout);
     return val;
-
-    /*
-    write_header(strlen(str) + 1, 0);
-    int val = fputs(str, nle.ttyrec);
-    putc('\n', nle.ttyrec);
-    return val;*/
-
-    /*assert(FALSE);
-  return 0;*/
-}
-
-
-ssize_t nle_get(buf, count) void *buf;
-size_t count;
-{
-    return read(nle.outpipe[0], buf, count);
 }
 
 void nle_yield(done) boolean done;
@@ -313,68 +296,49 @@ void nethack_exit(status) int status;
     nle_yield(TRUE);
 }
 
-void
+int oldin;
+
+boolean
 nle_start()
 {
     init_nle_globals();
 
-    int oldin = dup(STDIN_FILENO);
-    // int oldout = dup(STDOUT_FILENO);
-
+    oldin = dup(STDIN_FILENO);
     dup2(nle.inpipe[0], STDIN_FILENO);
-    // dup2(nle.outpipe[1], STDOUT_FILENO);
-
     close(nle.inpipe[0]);
-    // close(nle.outpipe[1]);
-
     nle.inpipe[0] = STDIN_FILENO;
-    // fnle.outpipe[1] = STDOUT_FILENO;
 
-    struct termios old, tty;
-    tcgetattr((int) oldin, &old);
-    tty = old;
-    tty.c_lflag &= ~ICANON;
-    tty.c_lflag &= ~ECHO;
-    tcsetattr(oldin, TCSANOW, &tty);
-
+    stack = create_fcontext_stack(STACK_SIZE);
+    generatorcontext = make_fcontext(stack.sptr, stack.ssize, mainloop);
     boolean done = FALSE;
 
-    fcontext_stack_t stack = create_fcontext_stack(STACK_SIZE);
+    fcontext_transfer_t t = jump_fcontext(generatorcontext, NULL);
+    generatorcontext = t.ctx;
+    done = (t.data != NULL);
 
-    fcontext_t generatorcontext =
-        make_fcontext(stack.sptr, stack.ssize, mainloop);
+    return done;
+}
 
-    ssize_t size;
-    char buf[BUFSIZ];
+boolean
+nle_step(char action)
+{
+    write(nle.inpipe[1], &action, 1);
 
-    fcontext_transfer_t t;
+    fcontext_transfer_t t = jump_fcontext(generatorcontext, NULL);
+    generatorcontext = t.ctx;
+    boolean done = (t.data != NULL);
 
-    for (;;) {
-        t = jump_fcontext(generatorcontext, NULL);
-        generatorcontext = t.ctx;
-        done = (t.data != NULL);
+    return done;
+}
 
-        /*while ((size = nle_get(buf, BUFSIZ)) > 0) {
-            write(oldout, buf, size);
-            break; // FIXME
-            }*/
-
-        if (done)
-            break;
-
-        char i;
-        read(oldin, &i, 1);
-        write(nle.inpipe[1], &i, 1);
-
-        write(STDOUT_FILENO, &i, 1);
-    }
-
-    const char *message = "nle_start: Read loop finished\n\0";
-    // write(oldout, message, strlen(message));
-
-    tcsetattr(oldin, TCSANOW, &old);
-
+void
+nle_end()
+{
+    dup2(oldin, STDIN_FILENO);
     destroy_fcontext_stack(&stack);
+
+    close(nle.inpipe[1]);
+    fclose(nle.ttyrec);
 }
 
 /* From unixtty.c */

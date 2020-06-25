@@ -33,7 +33,7 @@ target_link_directories(nethack PUBLIC /usr/local/lib)
 target_link_libraries(nethack PUBLIC ncurses m zmq lua)
 target_link_libraries(nethack PRIVATE flatbuffers fcontext)
 
-add_executable(rlmain "sys/unix/rlmainmain.cc")
+add_executable(rlmain "sys/unix/rlmain.cc")
 set_target_properties(rlmain PROPERTIES CXX_STANDARD 11)
 
 target_link_libraries(rlmain PUBLIC nethack)
