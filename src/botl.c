@@ -1397,7 +1397,7 @@ init_blstats()
 #endif
         }
     }
-    initalready = TRUE;
+    /*initalready = TRUE;*/
 }
 
 /*

@@ -40,17 +40,20 @@ def main():
     start_time = timeit.default_timer()
     start_steps = steps
 
-    while not nle.done():
-        ch = random.choice(ACTIONS)
-        nle.step(ch)
+    for episode in range(100):
+        while not nle.done():
+            ch = random.choice(ACTIONS)
+            nle.step(ch)
 
-        steps += 1
+            steps += 1
 
-        if steps % 1000 == 0:
-            end_time = timeit.default_timer()
-            print("%f SPS" % ((steps - start_steps) / (end_time - start_time)))
-            start_time = end_time
-            start_steps = steps
+            if steps % 1000 == 0:
+                end_time = timeit.default_timer()
+                print("%f SPS" % ((steps - start_steps) / (end_time - start_time)))
+                start_time = end_time
+                start_steps = steps
+        print("Finished episode %i after %i steps." % (episode + 1, steps))
+        nle.reset()
 
     print("Finished after %i steps." % steps)
 

@@ -425,8 +425,8 @@ NetHackRL::rl_init_nhwindows(int *argc, char **argv)
 {
     DEBUG_API("rl_init_nhwindows" << std::endl);
     ScopedStack s(win_proc_calls, "init_nhwindows");
-    instance = std::make_unique<NetHackRL>(*argc, argv);
     tty_init_nhwindows(argc, argv);
+    instance = std::make_unique<NetHackRL>(*argc, argv);
 }
 
 void

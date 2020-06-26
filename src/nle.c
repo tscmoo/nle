@@ -94,7 +94,7 @@ init_nle()
 {
     nle_ctx_t *nle = malloc(sizeof(nle_ctx_t));
 
-    nle->ttyrec = fopen("nle.ttyrec", "w");
+    nle->ttyrec = fopen("nle.ttyrec", "a");
     assert(nle->ttyrec != NULL);
 
     nle->outbuf_write_ptr = nle->outbuf;
@@ -163,6 +163,7 @@ mainloop(fcontext_transfer_t ctx_transfer)
      */
     vision_init();
 
+    /* Creates and displays the game windows. */
     display_gamewindows();
 
     boolean resuming = FALSE;
@@ -187,6 +188,47 @@ mainloop(fcontext_transfer_t ctx_transfer)
     }
 
     moveloop(resuming);
+}
+
+void
+resetloop(fcontext_transfer_t ctx_transfer)
+{
+    current_nle_ctx->returncontext = ctx_transfer.ctx;
+
+    early_init();
+
+    strncpy(g.plname, "Agent", sizeof g.plname - 1);
+    set_playmode(); /* sets plname to "wizard" for wizard mode */
+    g.plnamelen = (int) strlen(g.plname);
+
+    initoptions();
+
+    u.uhp = 1; /* prevent RIP on early quits */
+    g.program_state.preserve_locks = 1;
+
+    plnamesuffix();
+
+    init_nhwindows(0, NULL);
+
+    dlb_init(); /* must be before newgame() */
+
+    vision_init();
+
+    g.blinit = FALSE;
+    display_gamewindows();
+
+    if (*g.plname) {
+        /* TODO(heiner): Remove locks entirely.
+           By default, this also checks that we're on a pty... */
+        getlock();
+        g.program_state.preserve_locks = 0; /* after getlock() */
+    }
+
+    player_selection();
+
+    newgame();
+
+    moveloop(FALSE);
 }
 
 boolean
@@ -325,6 +367,20 @@ nle_step(nle_ctx_t *nle, int action)
     nle->done = (t.data != NULL);
 
     return nle;
+}
+
+void
+nle_reset(nle_ctx_t *nle)
+{
+    destroy_fcontext_stack(&nle->stack);
+    nle->stack = create_fcontext_stack(STACK_SIZE);
+    nle->generatorcontext =
+        make_fcontext(nle->stack.sptr, nle->stack.ssize, resetloop);
+
+    current_nle_ctx = nle;
+    fcontext_transfer_t t = jump_fcontext(nle->generatorcontext, NULL);
+    nle->generatorcontext = t.ctx;
+    nle->done = (t.data != NULL);
 }
 
 void

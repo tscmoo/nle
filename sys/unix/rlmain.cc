@@ -15,6 +15,16 @@ extern "C" {
 #include "nle.h"
 }
 
+void
+play(nle_ctx_t *nle)
+{
+    char i;
+    while (!nle->done) {
+        read(STDIN_FILENO, &i, 1);
+        nle = nle_step(nle, i);
+    }
+}
+
 int
 main(int argc, char **argv)
 {
@@ -26,12 +36,9 @@ main(int argc, char **argv)
     tcsetattr(STDIN_FILENO, TCSANOW, &tty);
 
     nle_ctx_t *nle = nle_start();
-
-    char i;
-    while (!nle->done) {
-        read(STDIN_FILENO, &i, 1);
-        nle = nle_step(nle, i);
-    }
+    play(nle);
+    nle_reset(nle);
+    play(nle);
     nle_end(nle);
 
     tcsetattr(STDIN_FILENO, TCSANOW, &old);

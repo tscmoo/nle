@@ -46,6 +46,11 @@ class NLE
     {
         return nle_->done;
     }
+    void
+    reset()
+    {
+        nle_reset(nle_);
+    }
 
   private:
     nle_ctx_t *nle_;
@@ -58,7 +63,8 @@ PYBIND11_MODULE(pynle, m)
     py::class_<NLE>(m, "NLE")
         .def(py::init<>())
         .def("step", &NLE::step, py::arg("action"))
-        .def("done", &NLE::done);
+        .def("done", &NLE::done)
+        .def("reset", &NLE::reset);
 
     m.attr("NHW_MESSAGE") = py::int_(NHW_MESSAGE);
     m.attr("NHW_STATUS") = py::int_(NHW_STATUS);

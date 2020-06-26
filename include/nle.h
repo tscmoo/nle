@@ -24,6 +24,7 @@ __thread nle_ctx_t *current_nle_ctx;
 
 nle_ctx_t *nle_start();
 nle_ctx_t *nle_step(nle_ctx_t *, int);
+void nle_reset(nle_ctx_t *);
 void nle_end(nle_ctx_t *);
 
 #endif /* NLE_H */
