@@ -123,6 +123,8 @@
 #endif
 #endif
 
+#define NO_SIGNAL /* Don't define interrupts in NLE. */
+
 #ifndef DEFAULT_WINDOW_SYS
 #define DEFAULT_WINDOW_SYS "tty"
 #endif
