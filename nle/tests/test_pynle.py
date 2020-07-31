@@ -9,7 +9,7 @@ import os
 import pynle
 
 
-SELF_PLAY = True
+SELF_PLAY = False
 
 
 @contextlib.contextmanager

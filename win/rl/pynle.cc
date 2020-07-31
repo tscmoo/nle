@@ -29,7 +29,7 @@ namespace py = pybind11;
 class NLE
 {
   public:
-    NLE()
+    NLE() : obs_{ 0, 0, nullptr, nullptr, nullptr }
     {
         obs_.chars = &chars_[0];
         nle_ = nle_start(&obs_);
