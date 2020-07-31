@@ -192,47 +192,6 @@ mainloop(fcontext_transfer_t ctx_transfer)
     moveloop(resuming);
 }
 
-void
-resetloop(fcontext_transfer_t ctx_transfer)
-{
-    current_nle_ctx->returncontext = ctx_transfer.ctx;
-
-    early_init();
-
-    strncpy(g.plname, "Agent", sizeof g.plname - 1);
-    set_playmode(); /* sets plname to "wizard" for wizard mode */
-    g.plnamelen = (int) strlen(g.plname);
-
-    initoptions();
-
-    u.uhp = 1; /* prevent RIP on early quits */
-    g.program_state.preserve_locks = 1;
-
-    plnamesuffix();
-
-    init_nhwindows(0, NULL);
-
-    dlb_init(); /* must be before newgame() */
-
-    vision_init();
-
-    g.blinit = FALSE;
-    display_gamewindows();
-
-    if (*g.plname) {
-        /* TODO(heiner): Remove locks entirely.
-           By default, this also checks that we're on a pty... */
-        getlock();
-        g.program_state.preserve_locks = 0; /* after getlock() */
-    }
-
-    player_selection();
-
-    newgame();
-
-    moveloop(FALSE);
-}
-
 boolean
 write_header(int length, unsigned char channel)
 {
@@ -325,26 +284,36 @@ int nle_puts(str) const char *str;
     return val;
 }
 
-char nle_yield(done) boolean done;
+/* Necessary for initial observation struct. */
+nle_obs *
+nle_get_obs()
+{
+    return current_nle_ctx->observation;
+}
+
+void *
+nle_yield(void *notdone)
 {
     nle_fflush(stdout);
     fcontext_transfer_t t =
-        jump_fcontext(current_nle_ctx->returncontext, (void *) done);
+        jump_fcontext(current_nle_ctx->returncontext, notdone);
 
-    if (!done)
+    if (notdone)
         current_nle_ctx->returncontext = t.ctx;
 
-    return (char) t.data;
+    return t.data;
 }
 
 void nethack_exit(status) int status;
 {
-    nle_yield(TRUE);
+    nle_yield(NULL);
 }
 
-nle_ctx_t *nle_start(outfile) FILE *outfile;
+nle_ctx_t *nle_start(outfile, obs) FILE *outfile;
+nle_obs *obs;
 {
     nle_ctx_t *nle = init_nle(outfile);
+    nle->observation = obs;
 
     nle->stack = create_fcontext_stack(STACK_SIZE);
     nle->generatorcontext =
@@ -353,36 +322,21 @@ nle_ctx_t *nle_start(outfile) FILE *outfile;
     current_nle_ctx = nle;
     fcontext_transfer_t t = jump_fcontext(nle->generatorcontext, NULL);
     nle->generatorcontext = t.ctx;
-    nle->done = (t.data != NULL);
+    obs->done = (t.data == NULL);
 
     return nle;
 }
 
 nle_ctx_t *
-nle_step(nle_ctx_t *nle, int action, boolean *done)
+nle_step(nle_ctx_t *nle, nle_obs *obs)
 {
     current_nle_ctx = nle;
-    fcontext_transfer_t t =
-        jump_fcontext(nle->generatorcontext, (void *) action);
+    nle->observation = obs;
+    fcontext_transfer_t t = jump_fcontext(nle->generatorcontext, obs);
     nle->generatorcontext = t.ctx;
-    nle->done = (t.data != NULL);
-    *done = nle->done;
+    obs->done = (t.data == NULL);
 
     return nle;
-}
-
-void
-nle_reset(nle_ctx_t *nle)
-{
-    destroy_fcontext_stack(&nle->stack);
-    nle->stack = create_fcontext_stack(STACK_SIZE);
-    nle->generatorcontext =
-        make_fcontext(nle->stack.sptr, nle->stack.ssize, resetloop);
-
-    current_nle_ctx = nle;
-    fcontext_transfer_t t = jump_fcontext(nle->generatorcontext, NULL);
-    nle->generatorcontext = t.ctx;
-    nle->done = (t.data != NULL);
 }
 
 void

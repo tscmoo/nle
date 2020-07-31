@@ -17,6 +17,10 @@ extern "C" {
 #include "wintty.h"
 }
 
+extern "C" {
+#include "nleobs.h"
+}
+
 #define USE_DEBUG_API 0
 
 #if USE_DEBUG_API
@@ -49,7 +53,8 @@ extern bool xwaitingforspace;
 extern unsigned long nle_seeds[];
 
 extern "C" {
-extern char nle_yield(boolean);
+extern void *nle_yield(boolean);
+extern nle_obs *nle_get_obs();
 }
 
 namespace nethack_rl
@@ -173,6 +178,7 @@ class NetHackRL
     void store_mapped_glyph(int ch, int color, int special, XCHAR_P x,
                             XCHAR_P y);
 
+    void fill_obs(nle_obs *);
     int getch_method();
 
     std::array<std::string, MAXBLSTATS> status_;
@@ -215,10 +221,29 @@ NetHackRL::player_selection_method()
     windows_[BASE_WINDOW]->strings.clear();
 }
 
+void
+NetHackRL::fill_obs(nle_obs *obs)
+{
+    if (obs->glyphs) {
+        std::memcpy(obs->glyphs, glyphs_.data(),
+                    sizeof(int16_t) * glyphs_.size());
+    }
+    if (obs->chars) {
+        std::memcpy(obs->chars, chars_.data(), chars_.size());
+    }
+    if (obs->colors) {
+        std::memcpy(obs->colors, colors_.data(), colors_.size());
+    }
+    if (obs->specials) {
+        std::memcpy(obs->specials, specials_.data(), specials_.size());
+    }
+}
+
 int
 NetHackRL::getch_method()
 {
-    int i = nle_yield(FALSE);
+    fill_obs(nle_get_obs());
+    int i = ((nle_obs *) nle_yield(TRUE))->action;
 
     /* NOT calling tty_nhgetch() but instead getting the input from
        the context switch. No stdin required. The following code is from
