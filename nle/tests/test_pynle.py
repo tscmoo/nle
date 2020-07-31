@@ -9,7 +9,7 @@ import os
 import pynle
 
 
-SELF_PLAY = False
+SELF_PLAY = True
 
 
 @contextlib.contextmanager
@@ -79,10 +79,16 @@ def main():
 
     print("Finished after %i steps. Mean sps: %f" % (steps, mean_sps))
 
-    if SELF_PLAY:
+    if not SELF_PLAY:
+        return
+
+    while not nle.done():
+        obs = nle.observation()
+        obs = obs.reshape((21, 79))
+        for line in obs:
+            print(line.tobytes().decode("utf-8"))
         with no_echo():
-            while not nle.done():
-                nle.step(ord(os.read(0, 1)))
+            nle.step(ord(os.read(0, 1)))
 
 
 main()

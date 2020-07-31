@@ -54,6 +54,7 @@ set_target_properties(rlmain PROPERTIES CXX_STANDARD 11)
 target_link_libraries(rlmain PUBLIC nethackdl)
 
 # pybind11 python library.
-# add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/third_party/pybind11)
-# pybind11_add_module(pynle win/rl/pynle.cc) target_link_libraries(pynle PUBLIC
-# nethackdl) set_target_properties(pynle PROPERTIES CXX_STANDARD 14)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/third_party/pybind11)
+pybind11_add_module(pynle win/rl/pynle.cc)
+target_link_libraries(pynle PUBLIC nethackdl)
+set_target_properties(pynle PROPERTIES CXX_STANDARD 14)

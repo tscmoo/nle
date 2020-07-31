@@ -1,4 +1,5 @@
 /* Copyright (c) Facebook, Inc. and its affiliates. */
+#include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 
 // "digit" is declared in both Python's longintrepr.h and NetHack's extern.h.
@@ -28,8 +29,10 @@ namespace py = pybind11;
 class NLE
 {
   public:
-    NLE() : nle_(nle_start())
+    NLE()
     {
+        obs_.chars = &chars_[0];
+        nle_ = nle_start(&obs_);
     }
     ~NLE()
     {
@@ -38,20 +41,29 @@ class NLE
     void
     step(int action)
     {
-        nle_ = nle_step(nle_, action);
+        obs_.action = action;
+        nle_ = nle_step(nle_, &obs_);
     }
     bool
     done()
     {
-        return nle_->done;
+        return obs_.done;
     }
     void
     reset()
     {
-        nle_reset(nle_);
+        nle_reset(nle_, &obs_);
+    }
+
+    char *
+    observation()
+    {
+        return &chars_[0];
     }
 
   private:
+    char chars_[ROWNO * (COLNO - 1)];
+    nle_obs obs_;
     nle_ctx_t *nle_;
 };
 
@@ -63,7 +75,11 @@ PYBIND11_MODULE(pynle, m)
         .def(py::init<>())
         .def("step", &NLE::step, py::arg("action"))
         .def("done", &NLE::done)
-        .def("reset", &NLE::reset);
+        .def("reset", &NLE::reset)
+        .def("observation", [](NLE &self) {
+            return py::array(
+                py::buffer_info(self.observation(), ROWNO * (COLNO - 1)));
+        });
 
     m.attr("NHW_MESSAGE") = py::int_(NHW_MESSAGE);
     m.attr("NHW_STATUS") = py::int_(NHW_STATUS);
