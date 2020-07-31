@@ -44,13 +44,17 @@ target_include_directories(nethack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
 target_link_directories(nethack PUBLIC /usr/local/lib)
 target_link_libraries(nethack PUBLIC ncurses m lua fcontext)
 
+# dlopen wrapper library
+add_library(nethackdl SHARED "sys/unix/nledl.c")
+target_include_directories(nethackdl PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
 # rlmain C++ (test) binary
 add_executable(rlmain "sys/unix/rlmain.cc")
 set_target_properties(rlmain PROPERTIES CXX_STANDARD 11)
-target_link_libraries(rlmain PUBLIC nethack)
+target_link_libraries(rlmain PUBLIC nethackdl)
 
 # pybind11 python library.
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/third_party/pybind11)
 pybind11_add_module(pynle win/rl/pynle.cc)
-target_link_libraries(pynle PUBLIC nethack)
+target_link_libraries(pynle PUBLIC nethackdl)
 set_target_properties(pynle PROPERTIES CXX_STANDARD 14)

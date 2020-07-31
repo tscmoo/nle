@@ -89,13 +89,14 @@ void sethanguphandler(handler) void FDECL((*handler), (int) );
 #endif /* ?SA_RESTART */
 }
 
-nle_ctx_t *
-init_nle()
+nle_ctx_t *init_nle(outfile) FILE *outfile;
 {
     nle_ctx_t *nle = malloc(sizeof(nle_ctx_t));
 
-    nle->ttyrec = fopen("nle.ttyrec", "a");
-    assert(nle->ttyrec != NULL);
+    if (!outfile) {
+        outfile = fopen("/dev/null", "w");
+    }
+    nle->ttyrec = outfile;
 
     nle->outbuf_write_ptr = nle->outbuf;
     nle->outbuf_write_end = nle->outbuf + sizeof(nle->outbuf);
@@ -115,6 +116,7 @@ mainloop(fcontext_transfer_t ctx_transfer)
 
     choose_windows("rl");
 
+    /* TODO: Make nethack not require HACKDIR to be pwd. */
     const char *dir = HACKDIR;
     if (dir && chdir(dir) < 0) {
         perror(dir);
@@ -340,10 +342,9 @@ void nethack_exit(status) int status;
     nle_yield(TRUE);
 }
 
-nle_ctx_t *
-nle_start()
+nle_ctx_t *nle_start(outfile) FILE *outfile;
 {
-    nle_ctx_t *nle = init_nle();
+    nle_ctx_t *nle = init_nle(outfile);
 
     nle->stack = create_fcontext_stack(STACK_SIZE);
     nle->generatorcontext =
@@ -358,13 +359,14 @@ nle_start()
 }
 
 nle_ctx_t *
-nle_step(nle_ctx_t *nle, int action)
+nle_step(nle_ctx_t *nle, int action, boolean *done)
 {
     current_nle_ctx = nle;
     fcontext_transfer_t t =
         jump_fcontext(nle->generatorcontext, (void *) action);
     nle->generatorcontext = t.ctx;
     nle->done = (t.data != NULL);
+    *done = nle->done;
 
     return nle;
 }
@@ -387,7 +389,6 @@ void
 nle_end(nle_ctx_t *nle)
 {
     destroy_fcontext_stack(&nle->stack);
-    fclose(nle->ttyrec);
     free(nle);
 }
 

@@ -1,6 +1,8 @@
 #ifndef NLE_H
 #define NLE_H
 
+#include <stdio.h>
+
 #include <fcontext/fcontext.h>
 
 /* TODO: Fix this. */
@@ -20,10 +22,14 @@ typedef struct nle_globals {
     char *outbuf_write_end;
 } nle_ctx_t;
 
-__thread nle_ctx_t *current_nle_ctx;
+/*
+ * Would like to annotate this with __thread, but that causes
+ * the MacOS dynamic linker to not unload the library on dlclose().
+ */
+nle_ctx_t *current_nle_ctx;
 
-nle_ctx_t *nle_start();
-nle_ctx_t *nle_step(nle_ctx_t *, int);
+nle_ctx_t *nle_start(FILE *);
+nle_ctx_t *nle_step(nle_ctx_t *, int, boolean *);
 void nle_reset(nle_ctx_t *);
 void nle_end(nle_ctx_t *);
 

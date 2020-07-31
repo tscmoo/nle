@@ -10,10 +10,9 @@ extern "C" {
 #include "pm.h" // File generated during NetHack compilation.
 #include "rm.h"
 }
-#include "wintty.h"
 
 extern "C" {
-#include "nle.h"
+#include "nledl.h"
 }
 
 // Undef name clashes between NetHack and Python.
@@ -22,7 +21,7 @@ extern "C" {
 #undef max
 
 // From drawing.c. Needs drawing.o at link time.
-extern const struct class_sym def_monsyms[MAXMCLASSES];
+// extern const struct class_sym def_monsyms[MAXMCLASSES];
 
 namespace py = pybind11;
 
@@ -72,7 +71,7 @@ PYBIND11_MODULE(pynle, m)
     m.attr("NHW_MENU") = py::int_(NHW_MENU);
     m.attr("NHW_TEXT") = py::int_(NHW_TEXT);
 
-    m.attr("MAXWIN") = py::int_(MAXWIN);
+    // m.attr("MAXWIN") = py::int_(MAXWIN);
 
     m.attr("NUMMONS") = py::int_(NUMMONS);
 
@@ -201,7 +200,7 @@ PYBIND11_MODULE(pynle, m)
                    + "' explain='" + std::string(cs.explain) + "'>";
         });
 
-    // m.def("mon", [](const int i) { return mons[i]; });
+    /*
     m.def(
         "glyph_to_mon",
         [](int glyph) -> const permonst * {
@@ -213,4 +212,5 @@ PYBIND11_MODULE(pynle, m)
         "mlet_to_class_sym",
         [](char let) -> const class_sym * { return &def_monsyms[let]; },
         py::return_value_policy::reference);
+    */
 }
