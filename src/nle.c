@@ -12,7 +12,7 @@
 
 #include "nle.h"
 
-#define STACK_SIZE (1 << 22) // 4MB
+#define STACK_SIZE (1 << 15) // 32KiB
 
 /* We are fine with whatever. */
 boolean
