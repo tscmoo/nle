@@ -358,9 +358,10 @@ class NLE(gym.Env):
         last_observation = tuple(a.copy() for a in self.last_observation)
 
         observation, done = self.env.step(self._actions[action])
-        observation, done = self._perform_known_steps(
-            observation, done, exceptions=True
-        )
+        if observation[self._program_state_index][0] == 1: # game over
+          observation, done = self._perform_known_steps(
+              observation, done, exceptions=True
+          )
 
         self._steps += 1
 
@@ -373,6 +374,8 @@ class NLE(gym.Env):
         end_status = self.StepStatus(done or end_status)
 
         reward = float(self._reward_fn(last_observation, observation, end_status))
+
+        #print("action %s, reward %g, score %g" %(self._actions[action], reward, self._get_observation(observation)["blstats"][9]))
 
         if end_status and not done:
             # Try to end the game nicely.
@@ -451,22 +454,23 @@ class NLE(gym.Env):
 
         self._steps = 0
 
-        for _ in range(1000):
-            # Get past initial phase of game. This should make sure
-            # all the observations are present.
-            if self._in_moveloop(self.last_observation):
-                break
-            # This fails if the agent picks up a scroll of scare
-            # monster at the 0th turn and gets asked to name it.
-            # Hence the defensive iteration above.
-            # TODO: Detect this 'in_getlin' situation and handle it.
-            self.last_observation, done = self.env.step(ASCII_SPACE)
-            assert not done, "Game ended unexpectedly"
-        else:
-            warnings.warn(
-                "Not in moveloop after 1000 tries, aborting (ttyrec: %s)." % new_ttyrec
-            )
-            return self.reset(wizkit_items=wizkit_items)
+        if False:
+          for _ in range(1000):
+              # Get past initial phase of game. This should make sure
+              # all the observations are present.
+              if self._in_moveloop(self.last_observation):
+                  break
+              # This fails if the agent picks up a scroll of scare
+              # monster at the 0th turn and gets asked to name it.
+              # Hence the defensive iteration above.
+              # TODO: Detect this 'in_getlin' situation and handle it.
+              self.last_observation, done = self.env.step(ASCII_SPACE)
+              assert not done, "Game ended unexpectedly"
+          else:
+              warnings.warn(
+                  "Not in moveloop after 1000 tries, aborting (ttyrec: %s)." % new_ttyrec
+              )
+              return self.reset(wizkit_items=wizkit_items)
 
         return self._get_observation(self.last_observation)
 
@@ -581,6 +585,7 @@ class NLE(gym.Env):
             return 0.0
         old_score = last_observation[self._blstats_index][BLSTATS_SCORE_INDEX]
         score = observation[self._blstats_index][BLSTATS_SCORE_INDEX]
+        #print("score is ", score)
         del end_status  # Unused for "score" reward.
         return score - old_score
 
@@ -624,6 +629,8 @@ class NLE(gym.Env):
 
     def _quit_game(self, observation, done):
         """Smoothly quit a game."""
+        if self.env.shared:
+            return
         # Get out of menus and windows.
         observation, done = self._perform_known_steps(
             observation, done, exceptions=False

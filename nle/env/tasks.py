@@ -15,6 +15,7 @@ TASK_ACTIONS = tuple(
     + [nethack.Command.KICK, nethack.Command.EAT, nethack.Command.SEARCH]
 )
 
+TASK_ACTIONS = nethack.USEFUL_ACTIONS
 
 class NetHackScore(base.NLE):
     """Environment for "score" task.
@@ -278,3 +279,74 @@ class NetHackScout(NetHackScore):
         self.dungeon_explored[key] = explored
         time_penalty = self._get_time_penalty(last_observation, observation)
         return reward + time_penalty
+
+class NetHackMoo(base.NLE):
+    """Environment for "moo" task.
+    """
+
+    def __init__(
+        self,
+        *args,
+        penalty_mode="constant",
+        penalty_step: float = -0.01,
+        penalty_time: float = -0.0,
+        **kwargs,
+    ):
+        self._frozen_steps = 0
+        self._prev_time = 0
+        self.visited = {}
+        self.dungeon_explored = {}
+
+        actions = kwargs.pop("actions", TASK_ACTIONS)
+        super().__init__(*args, actions=actions, **kwargs)
+
+
+    def step(self, action):
+        # add state counting to step function if desired
+        obs, reward, done, info = super().step(action)
+
+        blstats = obs["blstats"]
+        time = blstats[20]
+
+        if time == self._prev_time:
+            self._frozen_steps += 1
+            #print("self._frozen_steps is now ", self._frozen_steps)
+            if self._frozen_steps >= 24:
+                self._quit_game(self.last_observation, done)
+                reward = -1
+                done = True
+        else:
+            self._frozen_steps = 0
+        self._prev_time = time
+
+        return obs, reward, done, info
+
+    def reset(self, wizkit_items=None):
+        obs = super().reset(wizkit_items=wizkit_items)
+        self._frozen_steps = 0
+        self._prev_time = 0
+        self.visited = {}
+        self.dungeon_explored = {}
+        self.updatereward(obs["blstats"], obs["glyphs"])
+        return obs
+
+    def _reward_fn(self, last_observation, observation, end_status):
+        blstats = observation[self._blstats_index]
+        glyphs = observation[self._glyph_index]
+        return self.updatereward(blstats, glyphs)
+
+    def updatereward(self, blstats, glyphs):
+        reward = 0
+        dungeon_num, dungeon_level = blstats[23:25]
+        key = (dungeon_num, dungeon_level)
+        if key not in self.visited:
+            self.visited[key] = True
+            reward += 1
+        explored = np.sum(glyphs != 0)
+        explored_old = 0
+        if key in self.dungeon_explored:
+            explored_old = self.dungeon_explored[key]
+        reward = (explored - explored_old) / 500
+        self.dungeon_explored[key] = explored
+        return reward
+

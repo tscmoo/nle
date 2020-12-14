@@ -166,28 +166,28 @@ ACTIONS = tuple(
 )
 
 NON_RL_ACTIONS = (
-    Command.ANNOTATE,  # Could potentially be useful.
-    Command.AUTOPICKUP,
-    Command.CONDUCT,  # Could potentially be useful.
+    #Command.ANNOTATE,  # Could potentially be useful.
+    #Command.AUTOPICKUP,
+    #Command.CONDUCT,  # Could potentially be useful.
     Command.EXTCMD,  # Potentially useful for some wizard actions.
     Command.EXTLIST,
-    Command.GLANCE,
+    #Command.GLANCE,
     Command.HELP,
     Command.HISTORY,
-    Command.KNOWN,  # Could potentially be useful.
-    Command.KNOWNCLASS,  # Could potentially be useful.
+    #Command.KNOWN,  # Could potentially be useful.
+    #Command.KNOWNCLASS,  # Could potentially be useful.
     Command.OPTIONS,
-    Command.OVERVIEW,  # Could potentially be useful.
+    #Command.OVERVIEW,  # Could potentially be useful.
     Command.PREVMSG,  # Could potentially be useful.
-    Command.TELEPORT,
+    #Command.TELEPORT,
     Command.QUIT,
     Command.REDRAW,
     Command.SAVE,
-    Command.SEEALL,  # Could potentially be useful.
-    Command.TRAVEL,  # Could potentially be useful.
+    #Command.SEEALL,  # Could potentially be useful.
+    #Command.TRAVEL,  # Could potentially be useful.
     Command.VERSION,
-    Command.WHATDOES,
-    Command.WHATIS,
+    #Command.WHATDOES,
+    #Command.WHATIS,
 )
 
 _USEFUL_ACTIONS = list(ACTIONS)
