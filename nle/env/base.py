@@ -454,6 +454,10 @@ class NLE(gym.Env):
 
         self._steps = 0
 
+        # auto-select character attributes
+        observation, done = self.env.step(ASCII_SPACE)
+        observation, done = self.env.step(ASCII_SPACE)
+
         if False:
           for _ in range(1000):
               # Get past initial phase of game. This should make sure

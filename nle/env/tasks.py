@@ -280,6 +280,9 @@ class NetHackScout(NetHackScore):
         time_penalty = self._get_time_penalty(last_observation, observation)
         return reward + time_penalty
 
+
+moo_running_mean_score = 1
+moo_prev_score = 0
 class NetHackMoo(base.NLE):
     """Environment for "moo" task.
     """
@@ -296,6 +299,9 @@ class NetHackMoo(base.NLE):
         self._prev_time = 0
         self.visited = {}
         self.dungeon_explored = {}
+        self.totalexplored = 0
+        self._prev_score = 0
+        self.prev_step_score = 0
 
         actions = kwargs.pop("actions", TASK_ACTIONS)
         super().__init__(*args, actions=actions, **kwargs)
@@ -308,16 +314,66 @@ class NetHackMoo(base.NLE):
         blstats = obs["blstats"]
         time = blstats[20]
 
+        score = blstats[9] + self.totalexplored
+        if not self.env.in_normal_game():
+            score = self._prev_score
+
         if time == self._prev_time:
             self._frozen_steps += 1
             #print("self._frozen_steps is now ", self._frozen_steps)
-            if self._frozen_steps >= 24:
+            #if self._frozen_steps >= 12:
+            #    reward = -0.01
+            #if self._frozen_steps >= 48:
+            #    reward = -1
+            if self._frozen_steps >= 48:
                 self._quit_game(self.last_observation, done)
-                reward = -1
+                #reward = -1
                 done = True
         else:
             self._frozen_steps = 0
         self._prev_time = time
+        self._prev_score = score
+
+#        if time > 1:
+#          done = True
+#          reward = 1
+
+        global moo_running_mean_score
+        global moo_prev_score
+
+        #print("score %g, prev score %g" % (score, self._prev_score))
+
+        #score = blstats[9] + time + self.totalexplored
+        #if score >= moo_running_mean_score * 2:
+        #    done = True
+
+        if done:
+            #if score > moo_prev_score:
+            #    reward = 1
+            #elif score < moo_prev_score:
+            #    reward = -1
+            #else:
+            #    reward = 0
+            #reward = score / (moo_running_mean_score + 1e-4) - 1
+            #if reward > 1:
+            #  reward = 1
+            moo_prev_score = score
+            alpha = 0.999
+            moo_running_mean_score = moo_running_mean_score * alpha + score * (1 - alpha)
+            print("score %g, running mean %g" % (score, moo_running_mean_score))
+        #else:
+        #    reward = 0
+
+        diff = score - self.prev_step_score
+        self.prev_step_score = score
+
+        reward += diff
+
+#        reward = diff / (moo_running_mean_score + 1e-4)
+#        if reward < -1:
+#            reward = -1
+#        elif reward > 1:
+#            reward = 1
 
         return obs, reward, done, info
 
@@ -327,6 +383,9 @@ class NetHackMoo(base.NLE):
         self._prev_time = 0
         self.visited = {}
         self.dungeon_explored = {}
+        self.totalexplored = 0
+        self._prev_score = 0
+        self.prev_step_score = 0
         self.updatereward(obs["blstats"], obs["glyphs"])
         return obs
 
@@ -346,7 +405,363 @@ class NetHackMoo(base.NLE):
         explored_old = 0
         if key in self.dungeon_explored:
             explored_old = self.dungeon_explored[key]
-        reward = (explored - explored_old) / 500
+        reward = (explored - explored_old) / 100
+        self.totalexplored += reward
         self.dungeon_explored[key] = explored
+        return reward
+
+moo_running_mean_score = 1
+moo_prev_score = 0
+class NetHackMoo2(base.NLE):
+    """Environment for "moo" task.
+    """
+
+    def __init__(
+        self,
+        *args,
+        penalty_mode="constant",
+        penalty_step: float = -0.01,
+        penalty_time: float = -0.0,
+        **kwargs,
+    ):
+        self._frozen_steps = 0
+        self._prev_time = 0
+        self.visited = {}
+        self.dungeon_explored = {}
+        self.totalexplored = 0
+        self._prev_score = 0
+        self.prev_step_score = 0
+
+        actions = kwargs.pop("actions", TASK_ACTIONS)
+        super().__init__(*args, actions=actions, **kwargs)
+
+
+    def step(self, action):
+        # add state counting to step function if desired
+        obs, reward, done, info = super().step(action)
+
+        blstats = obs["blstats"]
+        time = blstats[20]
+
+        score = blstats[9] + self.totalexplored
+        if not self.env.in_normal_game():
+            score = self._prev_score
+
+        if time == self._prev_time:
+            self._frozen_steps += 1
+            #print("self._frozen_steps is now ", self._frozen_steps)
+            #if self._frozen_steps >= 12:
+            #    reward = -0.01
+            #if self._frozen_steps >= 48:
+            #    reward = -1
+            if self._frozen_steps >= 48:
+                self._quit_game(self.last_observation, done)
+                #reward = -1
+                done = True
+        else:
+            self._frozen_steps = 0
+        self._prev_time = time
+        self._prev_score = score
+
+#        if time > 1:
+#          done = True
+#          reward = 1
+
+        global moo_running_mean_score
+        global moo_prev_score
+
+        #print("score %g, prev score %g" % (score, self._prev_score))
+
+        #score = blstats[9] + time + self.totalexplored
+        #if score >= moo_running_mean_score * 2:
+        #    done = True
+
+        if done:
+#            if score > moo_prev_score:
+#                reward = 1
+#            elif score < moo_prev_score:
+#                reward = -1
+#            else:
+#                reward = 0
+            reward = score / (moo_running_mean_score + 1e-4) - 1
+            #if reward > 1:
+            #  reward = 1
+            #print("prev score %g\n" % moo_prev_score)
+            moo_prev_score = score
+            alpha = 0.999
+            moo_running_mean_score = moo_running_mean_score * alpha + score * (1 - alpha)
+            print("score %g, running mean %g" % (score, moo_running_mean_score))
+        else:
+            reward = 0
+
+        diff = score - self.prev_step_score
+        self.prev_step_score = score
+
+        #reward += diff
+
+#        reward = diff / (moo_running_mean_score + 1e-4)
+#        if reward < -1:
+#            reward = -1
+#        elif reward > 1:
+#            reward = 1
+
+        return obs, reward, done, info
+
+    def reset(self, wizkit_items=None):
+        obs = super().reset(wizkit_items=wizkit_items)
+        self._frozen_steps = 0
+        self._prev_time = 0
+        self.visited = {}
+        self.dungeon_explored = {}
+        self.totalexplored = 0
+        self._prev_score = 0
+        self.prev_step_score = 0
+        self.updatereward(obs["blstats"], obs["glyphs"])
+        return obs
+
+    def _reward_fn(self, last_observation, observation, end_status):
+        blstats = observation[self._blstats_index]
+        glyphs = observation[self._glyph_index]
+        return self.updatereward(blstats, glyphs)
+
+    def updatereward(self, blstats, glyphs):
+        reward = 0
+        dungeon_num, dungeon_level = blstats[23:25]
+        key = (dungeon_num, dungeon_level)
+        if key not in self.visited:
+            self.visited[key] = True
+            reward += 1
+        explored = np.sum(glyphs != 0)
+        explored_old = 0
+        if key in self.dungeon_explored:
+            explored_old = self.dungeon_explored[key]
+        reward = (explored - explored_old) / 100
+        self.totalexplored += reward
+        self.dungeon_explored[key] = explored
+        return reward
+
+
+moo_running_mean_score = 1
+moo_prev_score = 0
+class NetHackMoo3(base.NLE):
+    """Environment for "moo" task.
+    """
+
+    def __init__(
+        self,
+        *args,
+        penalty_mode="constant",
+        penalty_step: float = -0.01,
+        penalty_time: float = -0.0,
+        **kwargs,
+    ):
+        self._frozen_steps = 0
+        self._prev_time = 0
+        self._prev_score = 0
+        self.prev_step_score = 0
+
+        actions = kwargs.pop("actions", TASK_ACTIONS)
+        super().__init__(*args, actions=actions, **kwargs)
+
+
+    def step(self, action):
+        # add state counting to step function if desired
+        obs, reward, done, info = super().step(action)
+
+        blstats = obs["blstats"]
+        time = blstats[20]
+
+        score = blstats[9]
+        if not self.env.in_normal_game():
+            score = self._prev_score
+
+        if time == self._prev_time:
+            self._frozen_steps += 1
+            #print("self._frozen_steps is now ", self._frozen_steps)
+            if self._frozen_steps >= 12:
+                reward = -0.01
+            #if self._frozen_steps >= 48:
+            #    reward = -1
+            if self._frozen_steps >= 48:
+                self._quit_game(self.last_observation, done)
+                reward = -1
+                done = True
+        else:
+            self._frozen_steps = 0
+        self._prev_time = time
+        self._prev_score = score
+
+#        if time > 1:
+#          done = True
+#          reward = 1
+
+        global moo_running_mean_score
+        global moo_prev_score
+
+        #print("score %g, prev score %g" % (score, self._prev_score))
+
+        #score = blstats[9] + time + self.totalexplored
+        #if score >= moo_running_mean_score * 2:
+        #    done = True
+
+        if done:
+            #if score > moo_prev_score:
+            #    reward = 1
+            #elif score < moo_prev_score:
+            #    reward = -1
+            #else:
+            #    reward = 0
+            #reward = score / (moo_running_mean_score + 1e-4) - 1
+            #if reward > 1:
+            #  reward = 1
+            #print("prev score %g\n" % moo_prev_score)
+            moo_prev_score = score
+            alpha = 0.99
+            moo_running_mean_score = moo_running_mean_score * alpha + score * (1 - alpha)
+            print("score %g, running mean %g" % (score, moo_running_mean_score))
+        #else:
+        #    reward = 0
+
+        diff = score - self.prev_step_score
+        self.prev_step_score = score
+
+        reward += diff
+
+#        reward = diff / (moo_running_mean_score + 1e-4)
+#        if reward < -1:
+#            reward = -1
+#        elif reward > 1:
+#            reward = 1
+
+        return obs, reward, done, info
+
+    def reset(self, wizkit_items=None):
+        obs = super().reset(wizkit_items=wizkit_items)
+        self._frozen_steps = 0
+        self._prev_time = 0
+        self.totalexplored = 0
+        self._prev_score = 0
+        self.prev_step_score = 0
+        return obs
+
+    def _reward_fn(self, last_observation, observation, end_status):
+        return 0
+
+class NetHackDescend(NetHackScore):
+    """Environment for "descend" task.
+    """
+
+    def reset(self, *args, **kwargs):
+        obs = super().reset(*args, **kwargs)
+        self.visited = {}
+        self.dungeon_explored = {}
+        self.visitcount = 0
+        self.updatereward(obs["blstats"], obs["glyphs"])
+        return obs
+
+    def _reward_fn(self, last_observation, observation, end_status):
+        blstats = observation[self._blstats_index]
+        glyphs = observation[self._glyph_index]
+        internal = observation[self._internal_index]
+        if internal[3]:  # xwaitforspace
+            return self._get_time_penalty(last_observation, observation)
+        return self.updatereward(blstats, glyphs) + self._get_time_penalty(last_observation, observation)
+
+    def updatereward(self, blstats, glyphs):
+        reward = 0
+        dungeon_num, dungeon_level = blstats[23:25]
+        key = (dungeon_num, dungeon_level)
+        if key not in self.visited:
+            self.visited[key] = True
+            self.visitcount += 1
+            reward += 10
+        explored = np.sum(glyphs != 0)
+        explored_old = 0
+        if key in self.dungeon_explored:
+            explored_old = self.dungeon_explored[key]
+        reward += (explored - explored_old) / (200 * self.visitcount*self.visitcount)
+        self.dungeon_explored[key] = explored
+        return reward
+
+
+class NetHackDescend2(NetHackScore):
+    """Environment for "descend" task.
+    """
+
+    def reset(self, *args, **kwargs):
+        obs = super().reset(*args, **kwargs)
+        self.visited = {}
+        self.dungeon_explored = {}
+        self.visitcount = 0
+        self._prev_time = 0
+        self.poshistory = []
+        self.updatereward(obs["blstats"], obs["glyphs"])
+        return obs
+
+    def step(self, action):
+        obs, reward, done, info = super().step(action)
+
+        blstats = obs["blstats"]
+        time = blstats[20]
+
+        if time == self._prev_time:
+            self._frozen_steps += 1
+            #print("self._frozen_steps is now ", self._frozen_steps)
+            reward += 0.001
+            if self._frozen_steps >= 12:
+                reward += -0.01
+            #if self._frozen_steps >= 48:
+            #    reward += -1
+            if self._frozen_steps >= 48:
+                self._quit_game(self.last_observation, done)
+                #reward += -1
+                done = True
+        else:
+            self._frozen_steps = 0
+        self._prev_time = time
+
+        if done:
+            reward += -0.25
+
+        return obs, reward, done, info
+
+
+    def _reward_fn(self, last_observation, observation, end_status):
+        blstats = observation[self._blstats_index]
+        last_blstats = last_observation[self._blstats_index]
+        glyphs = observation[self._glyph_index]
+        internal = observation[self._internal_index]
+        reward = 0
+        if not internal[3]:  # xwaitforspace
+            reward += self.updatereward(blstats, glyphs)
+        pos = (blstats[23], blstats[24], int(blstats[0] / 3), int(blstats[1] / 3))
+        if not pos in self.poshistory:
+            reward += 0.01
+        if len(self.poshistory) > 24:
+            self.poshistory.pop(0)
+        self.poshistory.append(pos)
+        if blstats[19] > last_blstats[19]: # exp
+            reward += 0.04
+        if blstats[18] > last_blstats[18]: # exp level
+            reward += 0.25
+        return reward
+        #if internal[3]:  # xwaitforspace
+        #    return self._get_time_penalty(last_observation, observation)
+        #return self.updatereward(blstats, glyphs) + self._get_time_penalty(last_observation, observation)
+
+    def updatereward(self, blstats, glyphs):
+        reward = 0
+        dungeon_num, dungeon_level = blstats[23:25]
+        key = (dungeon_num, dungeon_level)
+        if key not in self.visited:
+            self.visited[key] = True
+            self.visitcount += 1
+            reward += 1
+        #explored = np.sum(glyphs != 0)
+        #explored_old = 0
+        #if key in self.dungeon_explored:
+        #    explored_old = self.dungeon_explored[key]
+        #reward += (explored - explored_old) / (200 * self.visitcount*self.visitcount)
+        #self.dungeon_explored[key] = explored
         return reward
 
